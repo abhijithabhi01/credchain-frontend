@@ -22,20 +22,18 @@ const ROLE_ROUTES = {
   admin: '/admin', issuer: '/issuer', student: '/student', employer: '/employer',
 }
 
-// ✅ FIX: Guard no longer redirects when loading — it waits.
-//    Also won't accidentally intercept /claim (which is unprotected).
 const Guard = ({ children, role }) => {
   const { isAuthenticated, user, loading } = useAuth()
   if (loading)          return <Spinner />
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  // ✅ If user has wrong role, redirect to their correct dashboard.
+  // This handles the brief moment after setSession() where user.role
+  // has already updated to 'student' and navigate('/student') fires —
+  // the Guard will now match correctly instead of bouncing elsewhere.
   if (role && user?.role !== role) return <Navigate to={ROLE_ROUTES[user?.role] ?? '/'} replace />
   return children
 }
 
-// ✅ FIX: GuestOnly no longer blocks /claim.
-//    If an issuer/admin clicks a claim link, they should still see the
-//    claim page — not get bounced to their dashboard.
-//    (ClaimCertificate handles the session swap itself.)
 const GuestOnly = ({ children }) => {
   const { isAuthenticated, user, loading } = useAuth()
   if (loading)         return <Spinner />
@@ -43,7 +41,7 @@ const GuestOnly = ({ children }) => {
   return children
 }
 
-// Hide Navbar on dashboard/auth pages
+// Hides Navbar on dashboard/auth/claim pages
 const DASHBOARD_PREFIXES = ['/admin', '/issuer', '/student', '/employer', '/login', '/register', '/claim']
 
 function AppShell() {
@@ -56,16 +54,17 @@ function AppShell() {
       {!isDashboard && <Navbar />}
 
       <Routes>
-        {/* ── Public — no auth required ── */}
+        {/* ── Public ── */}
         <Route path="/"       element={<Home />} />
         <Route path="/verify" element={<Verify />} />
 
-        {/* ✅ /claim is always public — never wrapped in Guard or GuestOnly.
-             The component handles the "already logged in" case internally
-             by doing a full page reload after swapping the token. */}
+        {/* ✅ /claim is ALWAYS public — never in Guard or GuestOnly.
+             ClaimCertificate calls setSession() to atomically swap the
+             in-memory user + token so the Guard on /student
+             sees role='student' the moment navigate() fires. */}
         <Route path="/claim"  element={<ClaimCertificate />} />
 
-        {/* ── Guest only (redirect to dashboard if already logged in) ── */}
+        {/* ── Guest only ── */}
         <Route path="/login"    element={<GuestOnly><Login /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
 

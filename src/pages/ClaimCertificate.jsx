@@ -1,17 +1,17 @@
 /**
  * /claim?token=xxx — Magic-link landing page.
  *
- * KEY FIXES:
- * 1. Uses window.location.href instead of navigate() so AuthProvider
- *    fully re-mounts with the new student token — prevents the old
- *    issuer session from lingering and hijacking the redirect.
- * 2. Clears any existing session token BEFORE setting the new one,
- *    so there's no race between the old user and the new student.
+ * Works whether nobody is logged in, a student is logged in,
+ * or an issuer/admin is logged in on another tab.
+ *
+ * Uses AuthContext.setSession() to atomically swap the in-memory
+ * user AND localStorage token in one step — no redirect loops.
  */
 import { useEffect, useState } from 'react'
-import { useSearchParams, Link } from 'react-router-dom'
+import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { claimService } from '@/services/api'
+import { useAuth } from '@/contexts/AuthContext'
 
 function Spinner() {
   return (
@@ -23,7 +23,10 @@ function Spinner() {
 
 export default function ClaimCertificate() {
   const [params]  = useSearchParams()
-  const token     = params.get('token')
+  const navigate  = useNavigate()
+  const { setSession } = useAuth()   // ✅ atomic session swap
+
+  const token = params.get('token')
 
   const [status,   setStatus]   = useState('loading')
   const [preview,  setPreview]  = useState(null)
@@ -54,21 +57,16 @@ export default function ClaimCertificate() {
     setClaiming(true)
     try {
       const { data } = await claimService.claimCert(token)
+
       if (data.success) {
-        // ✅ FIX: Clear any existing session (e.g. issuer logged in another tab)
-        //    BEFORE setting the new student token, then do a full page
-        //    navigation (not React Router navigate) so AuthProvider
-        //    re-mounts fresh with the student token.
-        localStorage.removeItem('token')
-        localStorage.setItem('token', data.token)
+        // ✅ Atomically replace issuer session with student session.
+        // setSession updates BOTH localStorage AND context.user in one call.
+        // React Router navigate() will now see user.role = 'student'
+        // immediately — no reload needed, no redirect loop.
+        setSession(data.token, data.user)
 
         setStatus('done')
-
-        // Full reload → AuthProvider.restore() picks up the new token
-        // and sets user = student, then Guard redirects to /student.
-        setTimeout(() => {
-          window.location.href = '/student'
-        }, 1500)
+        setTimeout(() => navigate('/student', { replace: true }), 1500)
       }
     } catch (err) {
       setStatus('error')
