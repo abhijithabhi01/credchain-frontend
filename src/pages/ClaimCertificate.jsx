@@ -11,7 +11,6 @@ import { useEffect, useState } from 'react'
 import { useSearchParams, useNavigate, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { claimService } from '@/services/api'
-import { useAuth } from '@/contexts/AuthContext'
 
 function Spinner() {
   return (
@@ -24,7 +23,6 @@ function Spinner() {
 export default function ClaimCertificate() {
   const [params]        = useSearchParams()
   const navigate        = useNavigate()
-  const { login }       = useAuth()
 
   const token = params.get('token')
 

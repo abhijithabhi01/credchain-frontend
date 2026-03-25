@@ -7,36 +7,9 @@ import { useToast } from '@/components/ui/use-toast'
 
 // ── Constants ─────────────────────────────────────────────────
 const DEGREE_GROUPS = [
-  { group: 'Engineering & Technology', degrees: [
-    'B.Tech Computer Science and Engineering',
-    'B.Tech Electronics and Communication Engineering',
-    'B.Tech Electrical and Electronics Engineering',
-    'B.Tech Mechanical Engineering', 'B.Tech Civil Engineering',
-    'B.Tech Information Technology',
-    'B.Tech Artificial Intelligence and Data Science',
-    'B.Tech Robotics and Automation',
-    'M.Tech Computer Science and Engineering',
-    'M.Tech VLSI and Embedded Systems', 'M.Tech Structural Engineering',
-  ]},
   { group: 'Computer Applications', degrees: [
-    'MCA — Master of Computer Applications',
-    'BCA — Bachelor of Computer Applications',
-  ]},
-  { group: 'Science', degrees: [
-    'B.Sc Computer Science', 'B.Sc Mathematics', 'B.Sc Physics',
-    'B.Sc Chemistry', 'M.Sc Computer Science',
-    'M.Sc Data Science', 'M.Sc Artificial Intelligence',
-  ]},
-  { group: 'Business & Management', degrees: [
-    'MBA — Master of Business Administration',
-    'BBA — Bachelor of Business Administration',
-    'MBA Finance', 'MBA Marketing', 'MBA Human Resources',
-  ]},
-  { group: 'Arts & Humanities', degrees: [
-    'BA English Literature', 'BA Economics', 'BA History',
-    'MA English', 'MA Economics',
-  ]},
-  { group: 'Other / Custom', degrees: ['Other (type below)'] },
+    'MCA — Master of Computer Applications'
+  ]}
 ]
 const GRADES = ['O', 'A+', 'A', 'B+', 'B', 'C', 'P', 'F']
 
@@ -134,6 +107,7 @@ function CertRow({ c, onRevoke, onResend }) {
 export default function IssuerDashboard() {
   const { user, logout } = useAuth()
   const { toast }        = useToast()
+
 
   const [tab,          setTab]          = useState('dashboard')
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
@@ -353,6 +327,12 @@ export default function IssuerDashboard() {
 
           <h1 className="text-[14px] md:text-[15px] font-semibold flex-1 truncate">
             {tab === 'dashboard' ? 'Issuer Dashboard' : 'Issued Certificates'}
+            <br />
+            {user.role === "issuer" && (
+              <span className="text-[11px] text-white/30">
+               {user.name}
+              </span>
+            )}
           </h1>
 
           <button onClick={() => setShowForm(true)}
