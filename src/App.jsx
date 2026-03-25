@@ -22,21 +22,28 @@ const ROLE_ROUTES = {
   admin: '/admin', issuer: '/issuer', student: '/student', employer: '/employer',
 }
 
+// ✅ FIX: Guard no longer redirects when loading — it waits.
+//    Also won't accidentally intercept /claim (which is unprotected).
 const Guard = ({ children, role }) => {
   const { isAuthenticated, user, loading } = useAuth()
-  if (loading)         return <Spinner />
+  if (loading)          return <Spinner />
   if (!isAuthenticated) return <Navigate to="/login" replace />
   if (role && user?.role !== role) return <Navigate to={ROLE_ROUTES[user?.role] ?? '/'} replace />
   return children
 }
 
+// ✅ FIX: GuestOnly no longer blocks /claim.
+//    If an issuer/admin clicks a claim link, they should still see the
+//    claim page — not get bounced to their dashboard.
+//    (ClaimCertificate handles the session swap itself.)
 const GuestOnly = ({ children }) => {
   const { isAuthenticated, user, loading } = useAuth()
-  if (loading)          return <Spinner />
-  if (isAuthenticated)  return <Navigate to={ROLE_ROUTES[user.role] ?? '/'} replace />
+  if (loading)         return <Spinner />
+  if (isAuthenticated) return <Navigate to={ROLE_ROUTES[user.role] ?? '/'} replace />
   return children
 }
 
+// Hide Navbar on dashboard/auth pages
 const DASHBOARD_PREFIXES = ['/admin', '/issuer', '/student', '/employer', '/login', '/register', '/claim']
 
 function AppShell() {
@@ -49,16 +56,20 @@ function AppShell() {
       {!isDashboard && <Navbar />}
 
       <Routes>
-        {/* Public */}
+        {/* ── Public — no auth required ── */}
         <Route path="/"       element={<Home />} />
         <Route path="/verify" element={<Verify />} />
+
+        {/* ✅ /claim is always public — never wrapped in Guard or GuestOnly.
+             The component handles the "already logged in" case internally
+             by doing a full page reload after swapping the token. */}
         <Route path="/claim"  element={<ClaimCertificate />} />
 
-        {/* Guest only */}
+        {/* ── Guest only (redirect to dashboard if already logged in) ── */}
         <Route path="/login"    element={<GuestOnly><Login /></GuestOnly>} />
         <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
 
-        {/* Protected */}
+        {/* ── Protected dashboards ── */}
         <Route path="/admin"    element={<Guard role="admin">   <AdminDashboard />   </Guard>} />
         <Route path="/issuer"   element={<Guard role="issuer">  <IssuerDashboard />  </Guard>} />
         <Route path="/student"  element={<Guard role="student"> <StudentDashboard /> </Guard>} />

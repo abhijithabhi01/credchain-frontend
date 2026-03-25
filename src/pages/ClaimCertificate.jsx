@@ -1,14 +1,15 @@
 /**
- * /claim?token=xxx
+ * /claim?token=xxx — Magic-link landing page.
  *
- * Magic-link landing page.
- * 1. Reads token from URL.
- * 2. Validates it (preview cert info, check expiry).
- * 3. On "Claim", calls POST /api/claim → gets JWT back.
- * 4. Stores JWT in localStorage → redirects to /student.
+ * KEY FIXES:
+ * 1. Uses window.location.href instead of navigate() so AuthProvider
+ *    fully re-mounts with the new student token — prevents the old
+ *    issuer session from lingering and hijacking the redirect.
+ * 2. Clears any existing session token BEFORE setting the new one,
+ *    so there's no race between the old user and the new student.
  */
 import { useEffect, useState } from 'react'
-import { useSearchParams, useNavigate, Link } from 'react-router-dom'
+import { useSearchParams, Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { claimService } from '@/services/api'
 
@@ -21,28 +22,30 @@ function Spinner() {
 }
 
 export default function ClaimCertificate() {
-  const [params]        = useSearchParams()
-  const navigate        = useNavigate()
+  const [params]  = useSearchParams()
+  const token     = params.get('token')
 
-  const token = params.get('token')
-
-  const [status,   setStatus]   = useState('loading') // loading | valid | invalid | expired | claimed | done | error
+  const [status,   setStatus]   = useState('loading')
   const [preview,  setPreview]  = useState(null)
   const [message,  setMessage]  = useState('')
   const [claiming, setClaiming] = useState(false)
 
   useEffect(() => {
-    if (!token) { setStatus('invalid'); setMessage('No claim token found in this link.'); return }
+    if (!token) {
+      setStatus('invalid')
+      setMessage('No claim token found in this link.')
+      return
+    }
     claimService.validateToken(token)
       .then(({ data }) => {
         if (data.valid) { setStatus('valid'); setPreview(data.preview) }
-        else             setStatus('invalid')
+        else setStatus('invalid')
       })
       .catch(err => {
         const msg = err?.response?.data?.message || 'Invalid or expired link.'
-        if (msg.toLowerCase().includes('expired'))    setStatus('expired')
-        else if (msg.toLowerCase().includes('used'))  setStatus('claimed')
-        else                                          setStatus('invalid')
+        if (msg.toLowerCase().includes('expired'))   setStatus('expired')
+        else if (msg.toLowerCase().includes('used')) setStatus('claimed')
+        else                                         setStatus('invalid')
         setMessage(msg)
       })
   }, [token])
@@ -52,15 +55,24 @@ export default function ClaimCertificate() {
     try {
       const { data } = await claimService.claimCert(token)
       if (data.success) {
-        // Log the student in immediately
+        // ✅ FIX: Clear any existing session (e.g. issuer logged in another tab)
+        //    BEFORE setting the new student token, then do a full page
+        //    navigation (not React Router navigate) so AuthProvider
+        //    re-mounts fresh with the student token.
+        localStorage.removeItem('token')
         localStorage.setItem('token', data.token)
+
         setStatus('done')
-        setTimeout(() => navigate('/student'), 2000)
+
+        // Full reload → AuthProvider.restore() picks up the new token
+        // and sets user = student, then Guard redirects to /student.
+        setTimeout(() => {
+          window.location.href = '/student'
+        }, 1500)
       }
     } catch (err) {
       setStatus('error')
       setMessage(err?.response?.data?.message || 'Something went wrong. Please try again.')
-    } finally {
       setClaiming(false)
     }
   }
@@ -69,13 +81,16 @@ export default function ClaimCertificate() {
     <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center px-4 py-16">
       {/* Logo */}
       <Link to="/" className="flex items-center gap-2.5 mb-12">
-        <div className="w-8 h-8 rounded-[8px] flex items-center justify-center text-base font-bold text-white"
-          style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}>⬡</div>
+        <div
+          className="w-8 h-8 rounded-[8px] flex items-center justify-center text-base font-bold text-white"
+          style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}
+        >⬡</div>
         <span className="text-[16px] font-semibold tracking-[0.04em]">CredChain</span>
       </Link>
 
       <motion.div
-        initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md bg-[#0f0f0f] border border-white/[0.08] rounded-2xl overflow-hidden"
       >
         {status === 'loading' && <Spinner />}
@@ -85,16 +100,18 @@ export default function ClaimCertificate() {
             <div className="text-center mb-6">
               <div className="text-4xl mb-3">🎓</div>
               <h1 className="text-[20px] font-[700] mb-1">Claim Your Certificate</h1>
-              <p className="text-[13px] text-white/40">Click below to link this certificate to your account.</p>
+              <p className="text-[13px] text-white/40">
+                Click below to link this certificate to your account.
+              </p>
             </div>
 
             <div className="bg-white/[0.03] border border-white/[0.07] rounded-xl p-5 mb-6">
               <dl className="space-y-3">
                 {[
-                  ['Student',    preview.studentName],
-                  ['Programme',  preview.courseName],
-                  ['Year',       preview.yearOfCompletion],
-                  ['Cert ID',    preview.certId],
+                  ['Student',   preview.studentName],
+                  ['Programme', preview.courseName],
+                  ['Year',      preview.yearOfCompletion],
+                  ['Cert ID',   preview.certId],
                 ].map(([label, value]) => value && (
                   <div key={label} className="flex justify-between gap-3">
                     <dt className="text-[12px] text-white/30 uppercase tracking-wide shrink-0">{label}</dt>
@@ -104,9 +121,12 @@ export default function ClaimCertificate() {
               </dl>
             </div>
 
-            <button onClick={handleClaim} disabled={claiming}
+            <button
+              onClick={handleClaim}
+              disabled={claiming}
               className="w-full h-12 rounded-xl text-[14px] font-semibold text-white disabled:opacity-50 flex items-center justify-center gap-2"
-              style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}>
+              style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}
+            >
               {claiming
                 ? <><div className="w-4 h-4 rounded-full border-2 border-white/30 border-t-white animate-spin" /> Claiming…</>
                 : '📥 Claim Certificate →'}
@@ -126,7 +146,7 @@ export default function ClaimCertificate() {
           </div>
         )}
 
-        {(status === 'invalid' || status === 'expired' || status === 'claimed' || status === 'error') && (
+        {['invalid', 'expired', 'claimed', 'error'].includes(status) && (
           <div className="p-8 text-center">
             <div className="text-5xl mb-4">
               {status === 'claimed' ? '🔒' : status === 'expired' ? '⏰' : '❌'}
@@ -137,13 +157,16 @@ export default function ClaimCertificate() {
                : 'Invalid Link'}
             </h2>
             <p className="text-[13px] text-white/40 mb-6">
-              {message ||
-                (status === 'claimed'  ? 'This claim link has already been used.' :
-                 status === 'expired'  ? 'This link has expired. Contact your issuer for a new one.' :
-                 'This claim link is invalid or does not exist.')}
+              {message || (
+                status === 'claimed'  ? 'This claim link has already been used.' :
+                status === 'expired'  ? 'This link has expired. Contact your issuer for a new one.' :
+                'This claim link is invalid or does not exist.'
+              )}
             </p>
-            <Link to="/login"
-              className="inline-block h-10 px-6 rounded-full border border-white/10 text-[13px] text-white/50 hover:text-white hover:border-white/30 transition-all">
+            <Link
+              to="/login"
+              className="inline-block h-10 px-6 rounded-full border border-white/10 text-[13px] text-white/50 hover:text-white hover:border-white/30 transition-all"
+            >
               Go to Login →
             </Link>
           </div>

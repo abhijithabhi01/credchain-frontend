@@ -13,7 +13,7 @@ export function AuthProvider({ children }) {
       const token = localStorage.getItem('token')
       if (!token) { setLoading(false); return }
       try {
-        const res = await authService.getProfile()   // GET /api/auth/me
+        const res = await authService.getProfile()
         setUser(res.data.user)
       } catch {
         localStorage.removeItem('token')
@@ -25,7 +25,7 @@ export function AuthProvider({ children }) {
     restore()
   }, [])
 
-  // ── register → POST /api/auth/register ───────────────────
+  // ── register ──────────────────────────────────────────────
   const register = useCallback(async (userData) => {
     const res = await authService.register(userData)
     const { token, user } = res.data
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
     return { user, token }
   }, [])
 
-  // ── login → POST /api/auth/login ─────────────────────────
+  // ── login ─────────────────────────────────────────────────
   const login = useCallback(async (credentials) => {
     const res = await authService.login(credentials)
     const { token, user } = res.data
@@ -44,13 +44,22 @@ export function AuthProvider({ children }) {
   }, [])
 
   // ── logout ────────────────────────────────────────────────
+  // ✅ FIX: also clears user state so stale sessions (e.g. issuer
+  //    logged in on another tab) don't bleed into the claim flow.
   const logout = useCallback(() => {
     localStorage.removeItem('token')
     setUser(null)
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAuthenticated: !!user, register, login, logout }}>
+    <AuthContext.Provider value={{
+      user,
+      loading,
+      isAuthenticated: !!user,
+      register,
+      login,
+      logout,
+    }}>
       {children}
     </AuthContext.Provider>
   )
