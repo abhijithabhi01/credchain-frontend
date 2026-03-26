@@ -16,10 +16,10 @@ api.interceptors.request.use(
 )
 
 export const authService = {
-  login:         credentials  => api.post('/auth/login', credentials),
-  register:      userData     => api.post('/auth/register', userData),
-  getProfile:    ()           => api.get('/auth/me'),
-  updateProfile: data         => api.put('/auth/profile', data),
+  login:         credentials => api.post('/auth/login', credentials),
+  register:      userData    => api.post('/auth/register', userData),
+  getProfile:    ()          => api.get('/auth/me'),
+  updateProfile: data        => api.put('/auth/profile', data),
 }
 
 export const adminService = {
@@ -32,19 +32,21 @@ export const adminService = {
 }
 
 export const issuerService = {
-  getDashboardStats:  ()         => api.get('/issuer/stats'),
-  uploadCertificate:  formData   => api.post('/issuer/upload', formData, {
+  getDashboardStats:  ()       => api.get('/issuer/stats'),
+  uploadCertificate:  formData => api.post('/issuer/upload', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   }),
-  issueCertificate:  data        => api.post('/issuer/issue', data),
-  getCertificates:   params      => api.get('/issuer/certificates', { params }),
-  revokeCertificate: certId      => api.post(`/issuer/revoke/${certId}`),
-  resendClaim:       certId      => api.post(`/issuer/resend-claim/${certId}`),
+  issueCertificate:  data      => api.post('/issuer/issue', data),
+  getCertificates:   params    => api.get('/issuer/certificates', { params }),
+  revokeCertificate: certId    => api.post(`/issuer/revoke/${certId}`),
+  resendClaim:       certId    => api.post(`/issuer/resend-claim/${certId}`),
 }
 
 export const publicService = {
-  verifyCertificate:    certId   => api.get(`/public/verify/${certId}`),
-  getCertificateDetails: certId  => api.get(`/public/certificate/${certId}`),
+  verifyCertificate:     certId => api.get(`/public/verify/${certId}`),
+  getCertificateDetails: certId => api.get(`/public/certificate/${certId}`),
+  // ✅ Used by StudentDashboard to manually link a certificate by ID
+  linkCertificate:       certId => api.post('/public/link-certificate', { certId }),
 }
 
 export const claimService = {
