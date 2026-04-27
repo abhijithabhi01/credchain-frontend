@@ -185,12 +185,6 @@ studentLogin(token, {
           </div>
         </div>
 
-        {/* Track status without login */}
-        <div className="mt-4 text-center">
-          <Link to="/student-portal/status" className="text-[12px] text-white/30 hover:text-white/60 transition-colors">
-            Track an existing request without login →
-          </Link>
-        </div>
       </motion.div>
     </div>
   )

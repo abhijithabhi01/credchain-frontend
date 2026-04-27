@@ -174,8 +174,8 @@ export default function AdminDashboard() {
           {[
             { id: 'overview', icon: '◈', label: 'Overview' },
             { id: 'issuers',  icon: '◉', label: 'Issuers' },
-            { id: 'certs',    icon: '◎', label: 'Certificates' },
-            { id: 'logs',     icon: '▦', label: 'Activity Logs' },
+            // { id: 'certs',    icon: '◎', label: 'Certificates' },
+            // { id: 'logs',     icon: '▦', label: 'Activity Logs' },
           ].map(item => (
             <button key={item.id} onClick={() => setTab(item.id)}
               className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-[13px] font-medium transition-all text-left"

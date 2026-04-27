@@ -114,7 +114,10 @@ function RequestRow({ req, onAction }) {
   const [rejReason,  setRejReason]  = useState('')
   const [showReject, setShowReject] = useState(false)
   const [busy,       setBusy]       = useState(false)
+  const [docPreview, setDocPreview] = useState(null)   // {label, dataUri}
   const st = REQUEST_STATUS[req.status] ?? REQUEST_STATUS.pending
+
+  const student = req.student   // populated from backend
 
   const doAction = async (status, extra = {}) => {
     setBusy(true)
@@ -124,102 +127,143 @@ function RequestRow({ req, onAction }) {
     setActionOpen(false)
   }
 
+  // ── Eligibility badges ──────────────────────────────────────────────────────
+  const badges = student ? [
+    {
+      label:  student.hasBacklogs      ? 'Has Backlogs'        : 'No Backlogs',
+      ok:     !student.hasBacklogs,
+      icon:   student.hasBacklogs      ? '✕'                   : '✓',
+    },
+    {
+      label:  student.resultsPublished ? 'Results Published'   : 'Results Pending',
+      ok:     student.resultsPublished,
+      icon:   student.resultsPublished ? '✓'                   : '!',
+    },
+    {
+      label:  student.degreeEligible   ? 'Degree Eligible'     : 'Not Eligible',
+      ok:     student.degreeEligible,
+      icon:   student.degreeEligible   ? '✓'                   : '✕',
+    },
+  ] : []
+
+  // ── Subjects grouped by semester ────────────────────────────────────────────
+  const semGroups = {}
+  if (student?.subjects?.length) {
+    for (const s of student.subjects) {
+      if (!semGroups[s.semester]) semGroups[s.semester] = []
+      semGroups[s.semester].push(s)
+    }
+  }
+  const allCleared = student?.subjects?.length
+    ? student.subjects.every(s => s.cleared)
+    : null
+
+  // ── Documents ───────────────────────────────────────────────────────────────
+  const documents = student?.documents ?? []
+  const requiredDocs = ['aadhar', 'hallticket', 'photo']
+  const docMap = {}
+  for (const d of documents) docMap[d.type] = d
+  const allDocsPresent = requiredDocs.every(t => !!docMap[t])
+
+  const DOC_LABELS = { aadhar: 'Aadhar Card', hallticket: 'Hall Ticket', photo: 'Passport Photo' }
+
+  // Grade → colour
+  const gradeColor = (grade) => {
+    if (!grade || grade === 'F') return 'text-red-400'
+    if (grade === 'O' || grade === 'A+') return 'text-green-400'
+    if (grade === 'A')  return 'text-emerald-400'
+    if (grade === 'B+') return 'text-blue-400'
+    return 'text-white/60'
+  }
+
   return (
     <div className="border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.1] transition-all">
-      {/* Row header */}
+
+      {/* ── Row header ── */}
       <div className="flex items-center gap-3 px-4 py-3.5">
-        {/* Status badge */}
         <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${st.bg} ${st.border} ${st.color}`}>
           {st.icon} {st.label}
         </span>
 
-        {/* Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            <p className="text-[13px] font-semibold truncate">{req.registerNumber}</p>
+            <p className="text-[13px] font-semibold truncate">
+              {student?.name ?? req.registerNumber}
+            </p>
+            <span className="text-[11px] text-white/40 font-mono shrink-0">{req.registerNumber}</span>
             <span className="text-[12px] text-white/40 shrink-0">{req.certificateType}</span>
           </div>
           <div className="flex gap-3 text-[11px] text-white/25 flex-wrap">
             <span>{req.email}</span>
             <span>{fmt(req.createdAt)}</span>
             <span className="font-mono">{req.requestId}</span>
+            {student?.course && <span>{student.course}</span>}
+            {student?.cgpa != null && (
+              <span className="text-[#38bdf8]/70">CGPA {student.cgpa.toFixed(2)}</span>
+            )}
           </div>
         </div>
 
-        {/* Actions */}
+        {/* Eligibility mini-badges */}
+        <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+          {badges.map(b => (
+            <span key={b.label}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                b.ok
+                  ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                  : 'bg-red-500/10 border-red-500/20 text-red-400'
+              }`}>
+              {b.icon} {b.label}
+            </span>
+          ))}
+        </div>
+
+        {/* Action buttons */}
         <div className="flex items-center gap-2 shrink-0">
-          {/* Quick approve / quick dispatch based on current status */}
           {req.status === 'pending' && (
-            <button
-              onClick={() => doAction('processing')}
-              disabled={busy}
-              className="h-7 px-3 rounded-lg border border-blue-500/25 text-[11px] text-blue-400 hover:bg-blue-500/10 transition-all disabled:opacity-40"
-            >
+            <button onClick={() => doAction('processing')} disabled={busy}
+              className="h-7 px-3 rounded-lg border border-blue-500/25 text-[11px] text-blue-400 hover:bg-blue-500/10 transition-all disabled:opacity-40">
               {busy ? <Spin size={3} /> : 'Start Review'}
             </button>
           )}
           {req.status === 'processing' && (
-            <button
-              onClick={() => doAction('approved')}
-              disabled={busy}
-              className="h-7 px-3 rounded-lg border border-green-500/25 text-[11px] text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-40"
-            >
+            <button onClick={() => doAction('approved')} disabled={busy}
+              className="h-7 px-3 rounded-lg border border-green-500/25 text-[11px] text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-40">
               {busy ? <Spin size={3} /> : 'Approve'}
             </button>
           )}
           {req.status === 'approved' && (
-            <button
-              onClick={() => doAction('dispatched')}
-              disabled={busy}
-              className="h-7 px-3 rounded-lg border border-purple-500/25 text-[11px] text-purple-400 hover:bg-purple-500/10 transition-all disabled:opacity-40"
-            >
+            <button onClick={() => doAction('dispatched')} disabled={busy}
+              className="h-7 px-3 rounded-lg border border-purple-500/25 text-[11px] text-purple-400 hover:bg-purple-500/10 transition-all disabled:opacity-40">
               {busy ? <Spin size={3} /> : 'Mark Dispatched'}
             </button>
           )}
-
-          {/* Reject button — shown for pending/processing */}
           {['pending', 'processing'].includes(req.status) && (
-            <button
-              onClick={() => setShowReject(v => !v)}
-              className="h-7 px-3 rounded-lg border border-red-500/20 text-[11px] text-red-400/70 hover:bg-red-500/10 transition-all"
-            >
+            <button onClick={() => setShowReject(v => !v)}
+              className="h-7 px-3 rounded-lg border border-red-500/20 text-[11px] text-red-400/70 hover:bg-red-500/10 transition-all">
               Reject
             </button>
           )}
-
-          {/* Expand details */}
-          <button
-            onClick={() => setExpanded(v => !v)}
-            className="h-7 w-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all"
-          >
+          <button onClick={() => setExpanded(v => !v)}
+            className="h-7 w-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all">
             <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Reject reason input */}
+      {/* ── Reject reason ── */}
       <AnimatePresence>
         {showReject && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
+          <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} className="overflow-hidden">
             <div className="px-4 pb-3 pt-1 bg-red-500/[0.04] border-t border-red-500/10">
               <p className="text-[11px] text-white/35 mb-2">Rejection reason (required)</p>
               <div className="flex gap-2">
-                <input
-                  value={rejReason}
-                  onChange={e => setRejReason(e.target.value)}
+                <input value={rejReason} onChange={e => setRejReason(e.target.value)}
                   placeholder="e.g. Incomplete documents, backlogs not cleared…"
-                  className="flex-1 h-9 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-white/20 outline-none focus:border-red-500/30"
-                />
-                <button
-                  onClick={() => { if (rejReason.trim()) doAction('rejected', { rejectionReason: rejReason.trim() }) }}
+                  className="flex-1 h-9 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-white/20 outline-none focus:border-red-500/30" />
+                <button onClick={() => { if (rejReason.trim()) doAction('rejected', { rejectionReason: rejReason.trim() }) }}
                   disabled={!rejReason.trim() || busy}
-                  className="h-9 px-4 rounded-lg bg-red-500/15 border border-red-500/30 text-[12px] text-red-400 font-semibold disabled:opacity-40"
-                >
+                  className="h-9 px-4 rounded-lg bg-red-500/15 border border-red-500/30 text-[12px] text-red-400 font-semibold disabled:opacity-40">
                   Confirm Reject
                 </button>
                 <button onClick={() => setShowReject(false)} className="h-9 px-3 rounded-lg border border-white/[0.08] text-[12px] text-white/30">
@@ -231,42 +275,180 @@ function RequestRow({ req, onAction }) {
         )}
       </AnimatePresence>
 
-      {/* Expanded details */}
+      {/* ── Expanded details ── */}
       <AnimatePresence>
         {expanded && (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            className="overflow-hidden"
-          >
-            <div className="px-4 pb-4 pt-1 border-t border-white/[0.05] bg-white/[0.01]">
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3 mt-3">
-                {[
-                  ['Request ID',    req.requestId],
-                  ['Mobile',        req.mobile],
-                  ['Email',         req.email],
-                  ['Delivery Address', req.address],
-                  ['Pincode',       req.pincode],
-                  ['Submitted',     fmt(req.createdAt)],
-                  ['Payment',       req.paymentStatus ?? 'paid'],
-                  ['Amount',        req.amount ? `₹${Number(req.amount).toLocaleString('en-IN')}` : '—'],
-                  ...(req.rejectionReason ? [['Rejection Reason', req.rejectionReason]] : []),
-                  ...(req.txHash ? [['Tx Hash', req.txHash.slice(0, 20) + '…']] : []),
-                ].map(([k, v]) => v ? (
-                  <div key={k}>
-                    <p className="text-[10px] text-white/25 uppercase tracking-[0.06em] mb-0.5">{k}</p>
-                    <p className="text-[12px] text-white/70 break-all">{v}</p>
+          <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} className="overflow-hidden">
+            <div className="border-t border-white/[0.05] bg-white/[0.01]">
+
+              {/* ── Section 1: Eligibility summary ── */}
+              {student && (
+                <div className="px-5 pt-5 pb-4">
+                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Eligibility Summary</p>
+                  <div className="flex flex-wrap gap-2">
+                    {badges.map(b => (
+                      <span key={b.label}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                          b.ok
+                            ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                            : 'bg-red-500/10 border-red-500/20 text-red-400'
+                        }`}>
+                        <span className="text-[14px]">{b.ok ? '✓' : '✕'}</span> {b.label}
+                      </span>
+                    ))}
+                    {allCleared !== null && (
+                      <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                        allCleared
+                          ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                          : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                      }`}>
+                        {allCleared ? '✓' : '!'} {allCleared ? 'All Subjects Cleared' : 'Subjects Pending'}
+                      </span>
+                    )}
+                    {allDocsPresent !== null && (
+                      <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                        allDocsPresent
+                          ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                          : 'bg-red-500/10 border-red-500/20 text-red-400'
+                      }`}>
+                        {allDocsPresent ? '✓' : '✕'} {allDocsPresent ? 'All Docs Uploaded' : 'Docs Missing'}
+                      </span>
+                    )}
                   </div>
-                ) : null)}
+                  {student.cgpa != null && (
+                    <p className="mt-3 text-[12px] text-white/40">
+                      CGPA <span className="text-[#38bdf8] font-semibold text-[14px]">{student.cgpa.toFixed(2)}</span>
+                      <span className="ml-3 text-white/25">/ {student.totalCredits} credits · {student.course} · {student.yearOfCompletion}</span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* ── Section 2: Documents ── */}
+              {documents.length > 0 && (
+                <div className="px-5 pb-5">
+                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Uploaded Documents</p>
+                  <div className="flex gap-3 flex-wrap">
+                    {requiredDocs.map(type => {
+                      const doc = docMap[type]
+                      if (!doc) {
+                        return (
+                          <div key={type}
+                            className="w-36 h-24 rounded-xl border border-red-500/20 bg-red-500/[0.04] flex flex-col items-center justify-center gap-1">
+                            <span className="text-[18px]">✕</span>
+                            <span className="text-[10px] text-red-400">{DOC_LABELS[type]}</span>
+                            <span className="text-[9px] text-red-400/50">Missing</span>
+                          </div>
+                        )
+                      }
+                      return (
+                        <button key={type} onClick={() => setDocPreview({ label: doc.label, dataUri: doc.dataUri })}
+                          className="w-36 h-24 rounded-xl border border-white/[0.08] overflow-hidden relative group hover:border-white/20 transition-all bg-white/[0.02]">
+                          {doc.dataUri && (
+                            <img src={doc.dataUri} alt={doc.label}
+                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                          )}
+                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-end pb-2 pointer-events-none">
+                            <span className="text-[9px] text-white font-semibold px-2 text-center leading-tight">{doc.label}</span>
+                            {doc.verified && (
+                              <span className="text-[8px] text-green-400 mt-0.5">✓ Verified</span>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section 3: Subjects ── */}
+              {Object.keys(semGroups).length > 0 && (
+                <div className="px-5 pb-5">
+                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">
+                    Academic Record — {student.subjects.length} Subjects
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {Object.keys(semGroups).sort((a, b) => a - b).map(sem => (
+                      <div key={sem} className="bg-black/30 rounded-xl border border-white/[0.05] overflow-hidden">
+                        <div className="px-3 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+                          <span className="text-[10px] text-white/40 uppercase tracking-[0.08em] font-semibold">
+                            Semester {sem}
+                          </span>
+                        </div>
+                        <div className="divide-y divide-white/[0.03]">
+                          {semGroups[sem].map(s => (
+                            <div key={s.code} className="px-3 py-2 flex items-center gap-2">
+                              <span className={`text-[11px] font-bold w-5 shrink-0 ${s.cleared ? 'text-green-400' : 'text-red-400'}`}>
+                                {s.cleared ? '✓' : '✕'}
+                              </span>
+                              <span className="text-[10px] font-mono text-white/30 w-14 shrink-0">{s.code}</span>
+                              <span className="text-[11px] text-white/70 flex-1 truncate">{s.name}</span>
+                              <span className="text-[10px] text-white/25 w-8 text-right shrink-0">{s.credits}cr</span>
+                              <span className={`text-[11px] font-bold w-8 text-right shrink-0 ${gradeColor(s.grade)}`}>
+                                {s.grade}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ── Section 4: Request details ── */}
+              <div className="px-5 pb-5">
+                <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Request Details</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                  {[
+                    ['Request ID',       req.requestId],
+                    ['Mobile',           req.mobile],
+                    ['Email',            req.email],
+                    ['Delivery Address', req.address],
+                    ['Pincode',          req.pincode],
+                    ['Submitted',        fmt(req.createdAt)],
+                    ...(req.rejectionReason ? [['Rejection Reason', req.rejectionReason]] : []),
+                    ...(req.txHash ? [['Tx Hash', req.txHash.slice(0, 20) + '…']] : []),
+                  ].map(([k, v]) => v ? (
+                    <div key={k}>
+                      <p className="text-[10px] text-white/25 uppercase tracking-[0.06em] mb-0.5">{k}</p>
+                      <p className="text-[12px] text-white/70 break-all">{v}</p>
+                    </div>
+                  ) : null)}
+                </div>
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Document preview modal ── */}
+      <AnimatePresence>
+        {docPreview && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
+            onClick={() => setDocPreview(null)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-[#0f0f0f] border border-white/[0.1] rounded-2xl p-4 max-w-lg w-full"
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[13px] font-semibold">{docPreview.label}</p>
+                <button onClick={() => setDocPreview(null)} className="text-white/30 hover:text-white text-[18px] leading-none">×</button>
+              </div>
+              <img src={docPreview.dataUri} alt={docPreview.label}
+                className="w-full rounded-xl border border-white/[0.07]" />
+            </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
     </div>
   )
 }
+
 
 // ── Status filter tabs ────────────────────────────────────────
 function FilterTabs({ active, onChange, stats }) {

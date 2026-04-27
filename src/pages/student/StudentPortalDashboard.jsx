@@ -1,9 +1,12 @@
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { studentPortalService } from '@/services/api'
 import { motion } from 'framer-motion'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import {
   GraduationCap, FileText, Search, LogOut,
   CheckCircle2, XCircle, ChevronRight, User, BookOpen, Clock,
+  AlertCircle, Package,
 } from 'lucide-react'
 
 function Sidebar({ active, onNav, onLogout, student, hasSubmittedRequest }) {
@@ -23,7 +26,7 @@ function Sidebar({ active, onNav, onLogout, student, hasSubmittedRequest }) {
 
   return (
     <aside className="w-[220px] shrink-0 border-r border-white/[0.06] flex flex-col py-8 px-5 sticky top-0 h-screen">
-      <Link to="/" className="flex items-center gap-2.5 mb-10">
+      <Link className="flex items-center gap-2.5 mb-10">
         <div className="w-7 h-7 rounded-[7px] flex items-center justify-center text-sm font-bold text-white"
           style={{ background: 'linear-gradient(90deg, #38bdf8 0%, #a855f7 100%)' }}>⬡</div>
         <span className="text-[15px] font-semibold tracking-[0.04em]">CredChain</span>
@@ -63,7 +66,55 @@ function Sidebar({ active, onNav, onLogout, student, hasSubmittedRequest }) {
   )
 }
 
-function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds }) {
+const STATUS_DISPLAY = {
+  pending:    { label: 'Pending Review',  color: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: <Clock size={16} className="text-amber-400" /> },
+  processing: { label: 'Under Review',   color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20',   icon: <Clock size={16} className="text-blue-400 animate-pulse" /> },
+  approved:   { label: 'Approved',       color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20',  icon: <CheckCircle2 size={16} className="text-green-400" /> },
+  dispatched: { label: 'Dispatched',     color: 'text-purple-400', bg: 'bg-purple-500/10', border: 'border-purple-500/20', icon: <Package size={16} className="text-purple-400" /> },
+  completed:  { label: 'Completed',      color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20',  icon: <CheckCircle2 size={16} className="text-green-400" /> },
+  rejected:   { label: 'Rejected',       color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: <XCircle size={16} className="text-red-400" /> },
+}
+
+function RequestStatusCard({ requestId, token }) {
+  const [data,    setData]    = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState('')
+
+  useEffect(() => {
+    if (!requestId) return
+    studentPortalService.getRequestStatus(requestId, token)
+      .then(res => setData(res.data?.request ?? res.data))
+      .catch(err => setError(err?.response?.data?.message ?? 'Could not load status'))
+      .finally(() => setLoading(false))
+  }, [requestId])
+
+  if (loading) return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-white/30">
+      <Clock size={13} className="animate-spin" /> Loading {requestId}…
+    </div>
+  )
+  if (error) return (
+    <div className="flex items-center gap-2 py-2 text-[12px] text-red-400">
+      <AlertCircle size={13} /> {requestId}: {error}
+    </div>
+  )
+
+  const st = STATUS_DISPLAY[data?.status] ?? STATUS_DISPLAY.pending
+  return (
+    <div className={`flex items-center justify-between px-4 py-3 rounded-xl border ${st.bg} ${st.border} mb-2`}>
+      <div className="flex items-center gap-3">
+        {st.icon}
+        <div>
+          <p className="text-[12px] font-mono text-white/50">{requestId}</p>
+          <p className="text-[11px] text-white/30">{data?.certificateType ?? '—'}</p>
+        </div>
+      </div>
+      <span className={`text-[12px] font-semibold ${st.color}`}>{st.label}</span>
+    </div>
+  )
+}
+
+function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds, studentToken }) {
   const eligible = student?.eligible
   const reason   = student?.eligibilityReason ?? student?.reason
 
@@ -71,7 +122,7 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
     ['Register Number', student?.registerNumber ?? '—'],
     ['Name',            student?.name           ?? '—'],
     ['Department',      student?.department      ?? student?.course ?? '—'],
-    ['Batch',           student?.batch           ?? student?.year   ?? '—'],
+    ['Batch',           student?.batch           ?? student?.year   ?? (student?.yearOfCompletion ? String(student.yearOfCompletion) : '—')],
     ['Institution',     student?.institution     ?? student?.college ?? 'KTU'],
   ]
 
@@ -139,26 +190,23 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
 
       {hasSubmittedRequest && (
         <div className="bg-[#0a0a0a] border border-[#38bdf8]/20 rounded-2xl p-6">
-          <div className="flex items-start gap-4">
-            <div className="w-10 h-10 rounded-xl bg-[#38bdf8]/10 border border-[#38bdf8]/20 flex items-center justify-center shrink-0">
-              <Clock size={18} className="text-[#38bdf8]" />
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-xl bg-[#38bdf8]/10 border border-[#38bdf8]/20 flex items-center justify-center shrink-0">
+              <Search size={16} className="text-[#38bdf8]" />
             </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-semibold text-white mb-1">Certificate Request Submitted</p>
-              <p className="text-[12px] text-white/40 mb-1">Your Degree + Provisional Certificate request is being processed.</p>
-              {submittedRequestIds.length > 0 && (
-                <p className="text-[11px] text-white/25 font-mono truncate">
-                  ID: {submittedRequestIds.join(', ')}
-                </p>
-              )}
-            </div>
+            <p className="text-[14px] font-semibold text-white">Your Certificate Requests</p>
+          </div>
+          <div className="mb-4">
+            {submittedRequestIds.map(id => (
+              <RequestStatusCard key={id} requestId={id} token={studentToken} />
+            ))}
           </div>
           <button
             onClick={() => onNav('status')}
-            className="mt-5 h-11 px-6 rounded-xl text-[13px] font-semibold text-white flex items-center gap-2"
+            className="h-10 px-5 rounded-xl text-[13px] font-semibold text-white flex items-center gap-2"
             style={{ background: 'linear-gradient(90deg, #38bdf8, #a855f7)' }}
           >
-            <Search size={14} /> Track Request Status
+            <Search size={14} /> View Full Status Details
           </button>
         </div>
       )}
@@ -175,7 +223,7 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
 }
 
 export default function StudentPortalDashboard() {
-  const { studentUser, studentLogout, hasSubmittedRequest, submittedRequestIds } = useStudentPortal()
+  const { studentUser, studentToken, studentLogout, hasSubmittedRequest, submittedRequestIds } = useStudentPortal()
   const navigate = useNavigate()
 
   const [tab, setTab] = (function() {
@@ -216,9 +264,10 @@ export default function StudentPortalDashboard() {
             onNav={handleNav}
             hasSubmittedRequest={hasSubmittedRequest}
             submittedRequestIds={submittedRequestIds}
+            studentToken={studentToken ?? localStorage.getItem('studentPortalToken')}
           />
         </div>
       </main>
     </div>
   )
-}  
+}

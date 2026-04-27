@@ -208,7 +208,7 @@ export default function RequestStatus() {
       {/* Header */}
       <div className="border-b border-white/[0.06] px-8 h-14 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link to="/" className="flex items-center gap-2">
+          <Link  className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-[7px] flex items-center justify-center text-sm font-bold"
               style={{ background: 'linear-gradient(90deg, #38bdf8 0%, #a855f7 100%)' }}>⬡</div>
             <span className="text-[15px] font-semibold tracking-[0.04em]">CredChain</span>
