@@ -40,16 +40,30 @@ export const issuerService = {
   getCertificates:   params    => api.get('/issuer/certificates', { params }),
   revokeCertificate: certId    => api.post(`/issuer/revoke/${certId}`),
   resendClaim:       certId    => api.post(`/issuer/resend-claim/${certId}`),
+
   // Certificate request management
-  getCertificateRequests:      params => api.get('/issuer/certificate-requests', { params }),
-  getCertificateRequestStats:  ()     => api.get('/issuer/certificate-requests/stats'),
-  updateRequestStatus:         (id, data) => api.patch(`/issuer/certificate-requests/${id}/status`, data),
+  getCertificateRequests:     params => api.get('/issuer/certificate-requests', { params }),
+  getCertificateRequestStats: ()     => api.get('/issuer/certificate-requests/stats'),
+
+  // Generic status update (processing / rejected / dispatched) — JSON body
+  updateRequestStatus: (id, data) =>
+    api.patch(`/issuer/certificate-requests/${id}/status`, data),
+
+  // Approve with PDF — sends multipart/form-data so the backend can
+  // upload to IPFS, issue on blockchain and send email in one step.
+  approveRequest: (id, pdfFile) => {
+    const fd = new FormData()
+    fd.append('status', 'approved')
+    fd.append('certificate', pdfFile)
+    return api.patch(`/issuer/certificate-requests/${id}/status`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
 }
 
 export const publicService = {
   verifyCertificate:     certId => api.get(`/public/verify/${certId}`),
   getCertificateDetails: certId => api.get(`/public/certificate/${certId}`),
-  // ✅ Used by StudentDashboard to manually link a certificate by ID
   linkCertificate:       certId => api.post('/public/link-certificate', { certId }),
 }
 
@@ -58,7 +72,7 @@ export const claimService = {
   claimCert:     token => api.post('/claim', { token }),
 }
 
-// ── Student Portal API (separate auth flow: registerNumber + dob) ──────────
+// ── Student Portal API ────────────────────────────────────────────────────────
 export const studentPortalService = {
   login: (data) =>
     api.post('/student/login', data),
@@ -72,11 +86,11 @@ export const studentPortalService = {
     api.get(`/student/request-status/${requestId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
-getMyRequests: (token) =>
-  api.get('/student/my-requests', {
-    headers: { Authorization: `Bearer ${token}` }
-  }),
-}
 
+  getMyRequests: (token) =>
+    api.get('/student/my-requests', {
+      headers: { Authorization: `Bearer ${token}` }
+    }),
+}
 
 export default api

@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 
 const CERT_AMOUNT = 2500
-const CERT_TYPES  = ['Degree Certificate', 'Provisional Certificate']
+const CERT_TYPES  = ['Degree Certificate']
 const STEPS       = ['Details', 'Documents', 'Payment', 'Summary', 'Submit']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -226,8 +226,8 @@ function DetailsStep({ form, errors, onChange, onNext }) {
               <CheckCircle2 size={13} className="text-[#38bdf8]" />
             </div>
             <div>
-              <p className="text-[14px] font-semibold text-white">Degree Certificate + Provisional Certificate</p>
-              <p className="text-[12px] text-white/40 mt-0.5">Both certificates are issued together</p>
+              <p className="text-[14px] font-semibold text-white">Degree Certificate</p>
+             
             </div>
           </label>
         </div>
@@ -237,7 +237,7 @@ function DetailsStep({ form, errors, onChange, onNext }) {
           <div>
             <p className="text-[11px] text-[#38bdf8]/60 uppercase tracking-[0.08em] mb-1">Total Certificate Fee</p>
             <div className="flex items-center gap-2 text-[12px] text-white/40">
-              <span>Degree ₹2,000</span><span className="text-white/20">+</span><span>Provisional ₹500</span>
+              <span>Degree Certificate ₹2,000</span>
             </div>
           </div>
           <p className="text-[24px] font-[800] tracking-[-0.04em]"
@@ -375,7 +375,7 @@ function PaymentStep({ form, onPay, paying, paid, onBack, onNext }) {
 
         <div className="space-y-3 mb-6">
           {[
-            ['Certificate', 'Degree + Provisional Certificate'],
+            ['Certificate', 'Degree Certificate'],
             ['Delivery To', form.address ? `${form.address}, ${form.pincode}` : '—'],
             ['Contact',     form.email],
           ].map(([k, v]) => (
@@ -510,7 +510,7 @@ function SummaryStep({ form, docs, student, onBack, onSubmit, submitting, apiErr
           </div>
           <div>
             <p className="text-[10px] text-white/30 uppercase tracking-[0.06em] mb-1">Certificate Types</p>
-            <p className="text-[13px] text-white/80">Degree + Provisional</p>
+            <p className="text-[13px] text-white/80">Degree completion</p>
           </div>
           <div>
             <p className="text-[10px] text-white/30 uppercase tracking-[0.06em] mb-1">Amount Paid</p>
@@ -637,7 +637,7 @@ function SuccessStep({ requestResult }) {
         </motion.div>
         <h2 className="text-[22px] font-[800] tracking-[-0.04em] mb-2">Request Submitted!</h2>
         <p className="text-[14px] text-white/50 mb-8 leading-relaxed">
-          Both your Degree Certificate and Provisional Certificate requests have been received.
+         Degree Certificate request have been received.
           You will receive updates at your registered email.
         </p>
 
@@ -645,7 +645,7 @@ function SuccessStep({ requestResult }) {
           {[
             ['Request ID(s)',  requestResult?.requestId ?? '—'],
             ['Status',         requestResult?.status ?? 'pending'],
-            ['Certificates',   'Degree + Provisional'],
+            ['Certificates',   'Degree Completion Certificate'],
           ].map(([k, v]) => (
             <div key={k} className="flex justify-between py-2.5 border-b border-white/[0.05] last:border-0 text-[13px]">
               <span className="text-white/35 shrink-0">{k}</span>
@@ -751,7 +751,7 @@ export default function CertificateRequestForm() {
             email:           form.email,
             address:         form.address,
             pincode:         form.pincode,
-            certificateType: type,
+            certificateType: "Degree Certificate",
             amount:          type === 'Degree Certificate' ? 2000 : 500,
             paymentStatus:   'paid',
             documents,

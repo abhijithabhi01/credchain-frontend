@@ -6,7 +6,7 @@ import { issuerService } from '@/services/api'
 import { useToast } from '@/components/ui/use-toast'
 import {
   CheckCircle2, XCircle, Clock, Loader2, RefreshCw,
-  ChevronDown, AlertCircle, Package, FileCheck,
+  ChevronDown, AlertCircle, Package, FileCheck, Upload, X,
 } from 'lucide-react'
 
 // ── Constants ─────────────────────────────────────────────────
@@ -64,6 +64,201 @@ function Step({ n, done, active, label }) {
   )
 }
 
+// ── Approve Upload Modal ──────────────────────────────────────
+// Shown when the issuer clicks "Approve" on a processing request.
+// The issuer picks the certificate PDF here; on submit the frontend
+// calls PATCH /certificate-requests/:id/status with multipart/form-data
+// containing status=approved + the PDF file.
+function ApproveModal({ req, onClose, onApprove }) {
+  const [pdfFile,   setPdfFile]   = useState(null)
+  const [drag,      setDrag]      = useState(false)
+  const [busy,      setBusy]      = useState(false)
+  const [error,     setError]     = useState('')
+  const fileInputRef = useRef(null)
+
+  const student = req.student
+
+  const handleFile = (file) => {
+    setError('')
+    if (!file) return
+    if (file.type !== 'application/pdf') {
+      setError('Only PDF files are accepted.')
+      return
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('File size must be under 10 MB.')
+      return
+    }
+    setPdfFile(file)
+  }
+
+  const handleSubmit = async () => {
+    if (!pdfFile) { setError('Please select the certificate PDF before approving.'); return }
+    setBusy(true)
+    setError('')
+    try {
+      await onApprove(req._id, pdfFile)
+      onClose()
+    } catch (err) {
+      setError(err?.response?.data?.message ?? 'Approval failed. Please try again.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4"
+      onClick={() => !busy && onClose()}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 10 }}
+        animate={{ scale: 1, opacity: 1, y: 0 }}
+        exit={{ scale: 0.95, opacity: 0 }}
+        transition={{ ease: [0.16, 1, 0.3, 1] }}
+        className="bg-[#0f0f0f] border border-white/[0.1] rounded-2xl p-6 sm:p-8 w-full max-w-[520px] max-h-[90vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between mb-5">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-7 h-7 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+                <CheckCircle2 size={14} className="text-green-400" />
+              </div>
+              <h2 className="text-[17px] font-[700]">Approve Request</h2>
+            </div>
+            <p className="text-[12px] text-white/35 ml-9">
+              Upload the signed certificate PDF — it will be issued to IPFS,
+              recorded on the blockchain, and emailed to the student.
+            </p>
+          </div>
+          <button onClick={onClose} disabled={busy}
+            className="text-white/30 hover:text-white transition-colors p-1 disabled:opacity-40 ml-3 shrink-0">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Student info summary */}
+        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-4 mb-5">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-[#a855f7]/10 border border-[#a855f7]/20 flex items-center justify-center text-sm shrink-0">
+              {student?.documents?.find(d => d.type === 'photo')?.dataUri
+                ? <img src={student.documents.find(d => d.type === 'photo').dataUri} alt="Photo" className="w-full h-full object-cover rounded-full" />
+                : '👤'}
+            </div>
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold truncate">{student?.name ?? req.registerNumber}</p>
+              <p className="text-[11px] text-white/35 truncate">{req.email} · {req.certificateType}</p>
+            </div>
+            <div className="ml-auto shrink-0 text-right">
+              <p className="text-[10px] text-white/25 uppercase tracking-wide">Reg No.</p>
+              <p className="text-[12px] font-mono text-white/60">{req.registerNumber}</p>
+            </div>
+          </div>
+          {student?.cgpa != null && (
+            <div className="mt-3 pt-3 border-t border-white/[0.05] flex gap-4 text-[11px]">
+              <span className="text-white/30">CGPA <span className="text-[#38bdf8] font-semibold">{student.cgpa.toFixed(2)}</span></span>
+              {student.course && <span className="text-white/30">{student.course}</span>}
+              {student.yearOfCompletion && <span className="text-white/30">Batch {student.yearOfCompletion}</span>}
+            </div>
+          )}
+        </div>
+
+        {/* PDF upload area */}
+        <p className="text-[11px] tracking-[0.08em] uppercase text-white/25 mb-2">Certificate PDF *</p>
+        <div
+          className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer mb-4 ${
+            drag       ? 'border-green-500/50 bg-green-500/[0.04]'
+            : pdfFile  ? 'border-green-500/30 bg-green-500/[0.03]'
+            : 'border-white/[0.1] hover:border-white/[0.2]'
+          }`}
+          onDragOver={e => { e.preventDefault(); setDrag(true) }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={e => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files[0]) }}
+          onClick={() => !busy && fileInputRef.current?.click()}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            className="hidden"
+            disabled={busy}
+            onChange={e => handleFile(e.target.files[0])}
+          />
+
+          {pdfFile ? (
+            <>
+              <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 size={20} className="text-green-400" />
+              </div>
+              <p className="text-[13px] font-semibold text-green-400 mb-1">{pdfFile.name}</p>
+              <p className="text-[11px] text-white/30">{(pdfFile.size / 1024).toFixed(1)} KB · Click to change</p>
+            </>
+          ) : (
+            <>
+              <div className="w-10 h-10 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center mx-auto mb-3">
+                <Upload size={18} className="text-white/30" />
+              </div>
+              <p className="text-[13px] font-medium text-white/60 mb-1">Drop PDF here or click to browse</p>
+              <p className="text-[11px] text-white/25">PDF only · max 10 MB</p>
+            </>
+          )}
+        </div>
+
+        {/* What happens next info */}
+        <div className="bg-[#a855f7]/[0.04] border border-[#a855f7]/15 rounded-xl p-4 mb-5">
+          <p className="text-[11px] text-white/40 mb-2 font-semibold uppercase tracking-wide">What happens on approve</p>
+          <div className="flex flex-col gap-1.5">
+            {[
+              { step: '1', text: 'PDF is uploaded to IPFS via Pinata', icon: '📦' },
+              { step: '2', text: 'Certificate is recorded on the blockchain', icon: '⛓️' },
+              { step: '3', text: 'Student receives email with PDF + claim link', icon: '📧' },
+            ].map(s => (
+              <div key={s.step} className="flex items-center gap-2.5">
+                <span className="text-[14px]">{s.icon}</span>
+                <span className="text-[12px] text-white/50">{s.text}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Error */}
+        {error && (
+          <div className="flex items-start gap-2 bg-red-500/[0.08] border border-red-500/20 rounded-xl p-3 mb-4">
+            <AlertCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+            <p className="text-[12px] text-red-400">{error}</p>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="flex gap-3">
+          <button
+            onClick={handleSubmit}
+            disabled={busy || !pdfFile}
+            className="btn-shine flex-1 h-11 rounded-xl text-[14px] font-semibold text-white disabled:opacity-40 flex items-center justify-center gap-2 transition-opacity"
+            style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}
+          >
+            {busy ? (
+              <><Spin size={4} color="border-t-white" /> Issuing Certificate…</>
+            ) : (
+              <><CheckCircle2 size={16} /> Approve & Issue</>
+            )}
+          </button>
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="h-11 px-5 rounded-xl border border-white/[0.1] text-[13px] text-white/40 hover:text-white transition-all disabled:opacity-40"
+          >
+            Cancel
+          </button>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+}
+
 // ── Certificate row (issued certs) ────────────────────────────
 function CertRow({ c, onRevoke, onResend }) {
   return (
@@ -108,26 +303,25 @@ function CertRow({ c, onRevoke, onResend }) {
 }
 
 // ── Request row ───────────────────────────────────────────────
-function RequestRow({ req, onAction }) {
-  const [expanded,   setExpanded]   = useState(false)
-  const [actionOpen, setActionOpen] = useState(false)
-  const [rejReason,  setRejReason]  = useState('')
-  const [showReject, setShowReject] = useState(false)
-  const [busy,       setBusy]       = useState(false)
-  const [docPreview, setDocPreview] = useState(null)   // {label, dataUri}
+function RequestRow({ req, onAction, onApprove }) {
+  const [expanded,     setExpanded]     = useState(false)
+  const [rejReason,    setRejReason]    = useState('')
+  const [showReject,   setShowReject]   = useState(false)
+  const [showApprove,  setShowApprove]  = useState(false)   // ← approve modal
+  const [busy,         setBusy]         = useState(false)
+  const [docPreview,   setDocPreview]   = useState(null)
   const st = REQUEST_STATUS[req.status] ?? REQUEST_STATUS.pending
 
-  const student = req.student   // populated from backend
+  const student = req.student
 
   const doAction = async (status, extra = {}) => {
     setBusy(true)
     await onAction(req._id, status, extra)
     setBusy(false)
     setShowReject(false)
-    setActionOpen(false)
   }
 
-  // ── Eligibility badges — derived from live flags (not stale degreeEligible) ─
+  // ── Eligibility badges ───────────────────────────────────────────────────
   const isActuallyEligible = student
     ? (!student.hasBacklogs && !!student.resultsPublished)
     : false
@@ -149,7 +343,7 @@ function RequestRow({ req, onAction }) {
     },
   ] : []
 
-  // ── Subjects grouped by semester ────────────────────────────────────────────
+  // ── Subjects grouped by semester ─────────────────────────────────────────
   const semGroups = {}
   if (student?.subjects?.length) {
     for (const s of student.subjects) {
@@ -161,19 +355,15 @@ function RequestRow({ req, onAction }) {
     ? student.subjects.every(s => s.cleared)
     : null
 
-  // ── Documents ───────────────────────────────────────────────────────────────
-  const documents = student?.documents ?? []
+  // ── Documents ────────────────────────────────────────────────────────────
+  const documents    = student?.documents ?? []
   const requiredDocs = ['aadhar', 'hallticket', 'photo']
-  const docMap = {}
+  const docMap       = {}
   for (const d of documents) docMap[d.type] = d
-  const allDocsPresent = requiredDocs.every(t => !!docMap[t])
+  const allDocsPresent  = requiredDocs.every(t => !!docMap[t])
+  const studentPhoto    = docMap['photo']
+  const DOC_LABELS      = { aadhar: 'Aadhar Card', hallticket: 'Hall Ticket', photo: 'Passport Photo' }
 
-  // Student passport photo (uploaded during certificate request)
-  const studentPhoto = docMap['photo']
-
-  const DOC_LABELS = { aadhar: 'Aadhar Card', hallticket: 'Hall Ticket', photo: 'Passport Photo' }
-
-  // Grade → colour
   const gradeColor = (grade) => {
     if (!grade || grade === 'F') return 'text-red-400'
     if (grade === 'O' || grade === 'A+') return 'text-green-400'
@@ -183,283 +373,305 @@ function RequestRow({ req, onAction }) {
   }
 
   return (
-    <div className="border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.1] transition-all">
+    <>
+      <div className="border border-white/[0.06] rounded-xl overflow-hidden hover:border-white/[0.1] transition-all">
 
-      {/* ── Row header ── */}
-      <div className="flex items-center gap-3 px-4 py-3.5">
-        <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${st.bg} ${st.border} ${st.color}`}>
-          {st.icon} {st.label}
-        </span>
+        {/* ── Row header ── */}
+        <div className="flex items-center gap-3 px-4 py-3.5">
+          <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${st.bg} ${st.border} ${st.color}`}>
+            {st.icon} {st.label}
+          </span>
 
-        {/* Student passport photo thumbnail */}
-        <div className="w-9 h-9 rounded-full shrink-0 overflow-hidden border border-white/[0.1] bg-white/[0.04] flex items-center justify-center">
-          {studentPhoto?.dataUri
-            ? <img src={studentPhoto.dataUri} alt="Photo" className="w-full h-full object-cover" />
-            : <span className="text-[14px] text-white/20">👤</span>
-          }
-        </div>
-
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-0.5">
-            <p className="text-[13px] font-semibold truncate">
-              {student?.name ?? req.registerNumber}
-            </p>
-            <span className="text-[11px] text-white/40 font-mono shrink-0">{req.registerNumber}</span>
-            <span className="text-[12px] text-white/40 shrink-0">{req.certificateType}</span>
+          {/* Student photo thumbnail */}
+          <div className="w-9 h-9 rounded-full shrink-0 overflow-hidden border border-white/[0.1] bg-white/[0.04] flex items-center justify-center">
+            {studentPhoto?.dataUri
+              ? <img src={studentPhoto.dataUri} alt="Photo" className="w-full h-full object-cover" />
+              : <span className="text-[14px] text-white/20">👤</span>
+            }
           </div>
-          <div className="flex gap-3 text-[11px] text-white/25 flex-wrap">
-            <span>{req.email}</span>
-            <span>{fmt(req.createdAt)}</span>
-            <span className="font-mono">{req.requestId}</span>
-            {student?.course && <span>{student.course}</span>}
-            {student?.cgpa != null && (
-              <span className="text-[#38bdf8]/70">CGPA {student.cgpa.toFixed(2)}</span>
-            )}
-          </div>
-        </div>
 
-        {/* Eligibility mini-badges */}
-        <div className="hidden lg:flex items-center gap-1.5 shrink-0">
-          {badges.map(b => (
-            <span key={b.label}
-              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
-                b.ok
-                  ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                  : 'bg-red-500/10 border-red-500/20 text-red-400'
-              }`}>
-              {b.icon} {b.label}
-            </span>
-          ))}
-        </div>
-
-        {/* Action buttons */}
-        <div className="flex items-center gap-2 shrink-0">
-          {req.status === 'pending' && (
-            <button onClick={() => doAction('processing')} disabled={busy}
-              className="h-7 px-3 rounded-lg border border-blue-500/25 text-[11px] text-blue-400 hover:bg-blue-500/10 transition-all disabled:opacity-40">
-              {busy ? <Spin size={3} /> : 'Start Review'}
-            </button>
-          )}
-          {req.status === 'processing' && (
-            <button onClick={() => doAction('approved')} disabled={busy}
-              className="h-7 px-3 rounded-lg border border-green-500/25 text-[11px] text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-40">
-              {busy ? <Spin size={3} /> : 'Approve'}
-            </button>
-          )}
-          {req.status === 'approved' && (
-            <button onClick={() => doAction('dispatched')} disabled={busy}
-              className="h-7 px-3 rounded-lg border border-purple-500/25 text-[11px] text-purple-400 hover:bg-purple-500/10 transition-all disabled:opacity-40">
-              {busy ? <Spin size={3} /> : 'Mark Dispatched'}
-            </button>
-          )}
-          {['pending', 'processing'].includes(req.status) && (
-            <button onClick={() => setShowReject(v => !v)}
-              className="h-7 px-3 rounded-lg border border-red-500/20 text-[11px] text-red-400/70 hover:bg-red-500/10 transition-all">
-              Reject
-            </button>
-          )}
-          <button onClick={() => setExpanded(v => !v)}
-            className="h-7 w-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all">
-            <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
-          </button>
-        </div>
-      </div>
-
-      {/* ── Reject reason ── */}
-      <AnimatePresence>
-        {showReject && (
-          <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} className="overflow-hidden">
-            <div className="px-4 pb-3 pt-1 bg-red-500/[0.04] border-t border-red-500/10">
-              <p className="text-[11px] text-white/35 mb-2">Rejection reason (required)</p>
-              <div className="flex gap-2">
-                <input value={rejReason} onChange={e => setRejReason(e.target.value)}
-                  placeholder="e.g. Incomplete documents, backlogs not cleared…"
-                  className="flex-1 h-9 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-white/20 outline-none focus:border-red-500/30" />
-                <button onClick={() => { if (rejReason.trim()) doAction('rejected', { rejectionReason: rejReason.trim() }) }}
-                  disabled={!rejReason.trim() || busy}
-                  className="h-9 px-4 rounded-lg bg-red-500/15 border border-red-500/30 text-[12px] text-red-400 font-semibold disabled:opacity-40">
-                  Confirm Reject
-                </button>
-                <button onClick={() => setShowReject(false)} className="h-9 px-3 rounded-lg border border-white/[0.08] text-[12px] text-white/30">
-                  Cancel
-                </button>
-              </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-0.5">
+              <p className="text-[13px] font-semibold truncate">
+                {student?.name ?? req.registerNumber}
+              </p>
+              <span className="text-[11px] text-white/40 font-mono shrink-0">{req.registerNumber}</span>
+              <span className="text-[12px] text-white/40 shrink-0">{req.certificateType}</span>
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            <div className="flex gap-3 text-[11px] text-white/25 flex-wrap">
+              <span>{req.email}</span>
+              <span>{fmt(req.createdAt)}</span>
+              <span className="font-mono">{req.requestId}</span>
+              {student?.course && <span>{student.course}</span>}
+              {student?.cgpa != null && (
+                <span className="text-[#38bdf8]/70">CGPA {student.cgpa.toFixed(2)}</span>
+              )}
+            </div>
+          </div>
 
-      {/* ── Expanded details ── */}
-      <AnimatePresence>
-        {expanded && (
-          <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} className="overflow-hidden">
-            <div className="border-t border-white/[0.05] bg-white/[0.01]">
+          {/* Eligibility mini-badges */}
+          <div className="hidden lg:flex items-center gap-1.5 shrink-0">
+            {badges.map(b => (
+              <span key={b.label}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+                  b.ok
+                    ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                    : 'bg-red-500/10 border-red-500/20 text-red-400'
+                }`}>
+                {b.icon} {b.label}
+              </span>
+            ))}
+          </div>
 
-              {/* ── Section 1: Eligibility summary ── */}
-              {student && (
-                <div className="px-5 pt-5 pb-4">
-                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Eligibility Summary</p>
-                  <div className="flex flex-wrap gap-2">
-                    {badges.map(b => (
-                      <span key={b.label}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
-                          b.ok
+          {/* Action buttons */}
+          <div className="flex items-center gap-2 shrink-0">
+            {req.status === 'pending' && (
+              <button onClick={() => doAction('processing')} disabled={busy}
+                className="h-7 px-3 rounded-lg border border-blue-500/25 text-[11px] text-blue-400 hover:bg-blue-500/10 transition-all disabled:opacity-40">
+                {busy ? <Spin size={3} /> : 'Start Review'}
+              </button>
+            )}
+
+            {/* ── APPROVE button opens the PDF-upload modal ── */}
+            {req.status === 'processing' && (
+              <button
+                onClick={() => setShowApprove(true)}
+                disabled={busy}
+                className="h-7 px-3 rounded-lg border border-green-500/25 text-[11px] text-green-400 hover:bg-green-500/10 transition-all disabled:opacity-40 flex items-center gap-1.5"
+              >
+                <CheckCircle2 size={11} />
+                {busy ? <Spin size={3} /> : 'Approve'}
+              </button>
+            )}
+
+            {req.status === 'approved' && (
+              <button onClick={() => doAction('dispatched')} disabled={busy}
+                className="h-7 px-3 rounded-lg border border-purple-500/25 text-[11px] text-purple-400 hover:bg-purple-500/10 transition-all disabled:opacity-40">
+                {busy ? <Spin size={3} /> : 'Mark Dispatched'}
+              </button>
+            )}
+
+            {['pending', 'processing'].includes(req.status) && (
+              <button onClick={() => setShowReject(v => !v)}
+                className="h-7 px-3 rounded-lg border border-red-500/20 text-[11px] text-red-400/70 hover:bg-red-500/10 transition-all">
+                Reject
+              </button>
+            )}
+
+            <button onClick={() => setExpanded(v => !v)}
+              className="h-7 w-7 rounded-lg border border-white/[0.08] flex items-center justify-center text-white/30 hover:text-white hover:border-white/20 transition-all">
+              <ChevronDown size={13} className={`transition-transform ${expanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+        </div>
+
+        {/* ── Reject reason ── */}
+        <AnimatePresence>
+          {showReject && (
+            <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} className="overflow-hidden">
+              <div className="px-4 pb-3 pt-1 bg-red-500/[0.04] border-t border-red-500/10">
+                <p className="text-[11px] text-white/35 mb-2">Rejection reason (required)</p>
+                <div className="flex gap-2">
+                  <input value={rejReason} onChange={e => setRejReason(e.target.value)}
+                    placeholder="e.g. Incomplete documents, backlogs not cleared…"
+                    className="flex-1 h-9 px-3 rounded-lg bg-white/[0.04] border border-white/[0.08] text-white text-[13px] placeholder:text-white/20 outline-none focus:border-red-500/30" />
+                  <button onClick={() => { if (rejReason.trim()) doAction('rejected', { rejectionReason: rejReason.trim() }) }}
+                    disabled={!rejReason.trim() || busy}
+                    className="h-9 px-4 rounded-lg bg-red-500/15 border border-red-500/30 text-[12px] text-red-400 font-semibold disabled:opacity-40">
+                    Confirm Reject
+                  </button>
+                  <button onClick={() => setShowReject(false)} className="h-9 px-3 rounded-lg border border-white/[0.08] text-[12px] text-white/30">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Expanded details ── */}
+        <AnimatePresence>
+          {expanded && (
+            <motion.div initial={{ height:0, opacity:0 }} animate={{ height:'auto', opacity:1 }} exit={{ height:0, opacity:0 }} className="overflow-hidden">
+              <div className="border-t border-white/[0.05] bg-white/[0.01]">
+
+                {/* Section 1: Eligibility summary */}
+                {student && (
+                  <div className="px-5 pt-5 pb-4">
+                    <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Eligibility Summary</p>
+                    <div className="flex flex-wrap gap-2">
+                      {badges.map(b => (
+                        <span key={b.label}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                            b.ok
+                              ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                              : 'bg-red-500/10 border-red-500/20 text-red-400'
+                          }`}>
+                          <span className="text-[14px]">{b.ok ? '✓' : '✕'}</span> {b.label}
+                        </span>
+                      ))}
+                      {allCleared !== null && (
+                        <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                          allCleared
+                            ? 'bg-green-500/10 border-green-500/20 text-green-400'
+                            : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                        }`}>
+                          {allCleared ? '✓' : '!'} {allCleared ? 'All Subjects Cleared' : 'Subjects Pending'}
+                        </span>
+                      )}
+                      {allDocsPresent !== null && (
+                        <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
+                          allDocsPresent
                             ? 'bg-green-500/10 border-green-500/20 text-green-400'
                             : 'bg-red-500/10 border-red-500/20 text-red-400'
                         }`}>
-                        <span className="text-[14px]">{b.ok ? '✓' : '✕'}</span> {b.label}
-                      </span>
-                    ))}
-                    {allCleared !== null && (
-                      <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
-                        allCleared
-                          ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                          : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                      }`}>
-                        {allCleared ? '✓' : '!'} {allCleared ? 'All Subjects Cleared' : 'Subjects Pending'}
-                      </span>
-                    )}
-                    {allDocsPresent !== null && (
-                      <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold border ${
-                        allDocsPresent
-                          ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                          : 'bg-red-500/10 border-red-500/20 text-red-400'
-                      }`}>
-                        {allDocsPresent ? '✓' : '✕'} {allDocsPresent ? 'All Docs Uploaded' : 'Docs Missing'}
-                      </span>
-                    )}
-                  </div>
-                  {student.cgpa != null && (
-                    <p className="mt-3 text-[12px] text-white/40">
-                      CGPA <span className="text-[#38bdf8] font-semibold text-[14px]">{student.cgpa.toFixed(2)}</span>
-                      <span className="ml-3 text-white/25">/ {student.totalCredits} credits · {student.course} · {student.yearOfCompletion}</span>
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* ── Section 2: Documents ── */}
-              {documents.length > 0 && (
-                <div className="px-5 pb-5">
-                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Uploaded Documents</p>
-                  <div className="flex gap-3 flex-wrap">
-                    {requiredDocs.map(type => {
-                      const doc = docMap[type]
-                      if (!doc) {
-                        return (
-                          <div key={type}
-                            className="w-36 h-24 rounded-xl border border-red-500/20 bg-red-500/[0.04] flex flex-col items-center justify-center gap-1">
-                            <span className="text-[18px]">✕</span>
-                            <span className="text-[10px] text-red-400">{DOC_LABELS[type]}</span>
-                            <span className="text-[9px] text-red-400/50">Missing</span>
-                          </div>
-                        )
-                      }
-                      return (
-                        <button key={type} onClick={() => setDocPreview({ label: doc.label, dataUri: doc.dataUri })}
-                          className="w-36 h-24 rounded-xl border border-white/[0.08] overflow-hidden relative group hover:border-white/20 transition-all bg-white/[0.02]">
-                          {doc.dataUri && (
-                            <img src={doc.dataUri} alt={doc.label}
-                              className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
-                          )}
-                          <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-end pb-2 pointer-events-none">
-                            <span className="text-[9px] text-white font-semibold px-2 text-center leading-tight">{doc.label}</span>
-                            {doc.verified && (
-                              <span className="text-[8px] text-green-400 mt-0.5">✓ Verified</span>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Section 3: Subjects ── */}
-              {Object.keys(semGroups).length > 0 && (
-                <div className="px-5 pb-5">
-                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">
-                    Academic Record — {student.subjects.length} Subjects
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {Object.keys(semGroups).sort((a, b) => a - b).map(sem => (
-                      <div key={sem} className="bg-black/30 rounded-xl border border-white/[0.05] overflow-hidden">
-                        <div className="px-3 py-2 border-b border-white/[0.04] bg-white/[0.02]">
-                          <span className="text-[10px] text-white/40 uppercase tracking-[0.08em] font-semibold">
-                            Semester {sem}
-                          </span>
-                        </div>
-                        <div className="divide-y divide-white/[0.03]">
-                          {semGroups[sem].map(s => (
-                            <div key={s.code} className="px-3 py-2 flex items-center gap-2">
-                              <span className={`text-[11px] font-bold w-5 shrink-0 ${s.cleared ? 'text-green-400' : 'text-red-400'}`}>
-                                {s.cleared ? '✓' : '✕'}
-                              </span>
-                              <span className="text-[10px] font-mono text-white/30 w-14 shrink-0">{s.code}</span>
-                              <span className="text-[11px] text-white/70 flex-1 truncate">{s.name}</span>
-                              <span className="text-[10px] text-white/25 w-8 text-right shrink-0">{s.credits}cr</span>
-                              <span className={`text-[11px] font-bold w-8 text-right shrink-0 ${gradeColor(s.grade)}`}>
-                                {s.grade}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* ── Section 4: Request details ── */}
-              <div className="px-5 pb-5">
-                <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Request Details</p>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
-                  {[
-                    ['Request ID',       req.requestId],
-                    ['Mobile',           req.mobile],
-                    ['Email',            req.email],
-                    ['Delivery Address', req.address],
-                    ['Pincode',          req.pincode],
-                    ['Submitted',        fmt(req.createdAt)],
-                    ...(req.rejectionReason ? [['Rejection Reason', req.rejectionReason]] : []),
-                    ...(req.txHash ? [['Tx Hash', req.txHash.slice(0, 20) + '…']] : []),
-                  ].map(([k, v]) => v ? (
-                    <div key={k}>
-                      <p className="text-[10px] text-white/25 uppercase tracking-[0.06em] mb-0.5">{k}</p>
-                      <p className="text-[12px] text-white/70 break-all">{v}</p>
+                          {allDocsPresent ? '✓' : '✕'} {allDocsPresent ? 'All Docs Uploaded' : 'Docs Missing'}
+                        </span>
+                      )}
                     </div>
-                  ) : null)}
+                    {student.cgpa != null && (
+                      <p className="mt-3 text-[12px] text-white/40">
+                        CGPA <span className="text-[#38bdf8] font-semibold text-[14px]">{student.cgpa.toFixed(2)}</span>
+                        <span className="ml-3 text-white/25">/ {student.totalCredits} credits · {student.course} · {student.yearOfCompletion}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Section 2: Documents */}
+                {documents.length > 0 && (
+                  <div className="px-5 pb-5">
+                    <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Uploaded Documents</p>
+                    <div className="flex gap-3 flex-wrap">
+                      {requiredDocs.map(type => {
+                        const doc = docMap[type]
+                        if (!doc) {
+                          return (
+                            <div key={type}
+                              className="w-36 h-24 rounded-xl border border-red-500/20 bg-red-500/[0.04] flex flex-col items-center justify-center gap-1">
+                              <span className="text-[18px]">✕</span>
+                              <span className="text-[10px] text-red-400">{DOC_LABELS[type]}</span>
+                              <span className="text-[9px] text-red-400/50">Missing</span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <button key={type} onClick={() => setDocPreview({ label: doc.label, dataUri: doc.dataUri })}
+                            className="w-36 h-24 rounded-xl border border-white/[0.08] overflow-hidden relative group hover:border-white/20 transition-all bg-white/[0.02]">
+                            {doc.dataUri && (
+                              <img src={doc.dataUri} alt={doc.label}
+                                className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+                            )}
+                            <div className="absolute inset-0 bg-black/40 flex flex-col items-center justify-end pb-2 pointer-events-none">
+                              <span className="text-[9px] text-white font-semibold px-2 text-center leading-tight">{doc.label}</span>
+                              {doc.verified && (
+                                <span className="text-[8px] text-green-400 mt-0.5">✓ Verified</span>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 3: Subjects */}
+                {Object.keys(semGroups).length > 0 && (
+                  <div className="px-5 pb-5">
+                    <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">
+                      Academic Record — {student.subjects.length} Subjects
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {Object.keys(semGroups).sort((a, b) => a - b).map(sem => (
+                        <div key={sem} className="bg-black/30 rounded-xl border border-white/[0.05] overflow-hidden">
+                          <div className="px-3 py-2 border-b border-white/[0.04] bg-white/[0.02]">
+                            <span className="text-[10px] text-white/40 uppercase tracking-[0.08em] font-semibold">
+                              Semester {sem}
+                            </span>
+                          </div>
+                          <div className="divide-y divide-white/[0.03]">
+                            {semGroups[sem].map(s => (
+                              <div key={s.code} className="px-3 py-2 flex items-center gap-2">
+                                <span className={`text-[11px] font-bold w-5 shrink-0 ${s.cleared ? 'text-green-400' : 'text-red-400'}`}>
+                                  {s.cleared ? '✓' : '✕'}
+                                </span>
+                                <span className="text-[10px] font-mono text-white/30 w-14 shrink-0">{s.code}</span>
+                                <span className="text-[11px] text-white/70 flex-1 truncate">{s.name}</span>
+                                <span className="text-[10px] text-white/25 w-8 text-right shrink-0">{s.credits}cr</span>
+                                <span className={`text-[11px] font-bold w-8 text-right shrink-0 ${gradeColor(s.grade)}`}>
+                                  {s.grade}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Section 4: Request details */}
+                <div className="px-5 pb-5">
+                  <p className="text-[10px] text-white/25 uppercase tracking-[0.1em] mb-3">Request Details</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+                    {[
+                      ['Request ID',       req.requestId],
+                      ['Mobile',           req.mobile],
+                      ['Email',            req.email],
+                      ['Delivery Address', req.address],
+                      ['Pincode',          req.pincode],
+                      ['Submitted',        fmt(req.createdAt)],
+                      ...(req.rejectionReason ? [['Rejection Reason', req.rejectionReason]] : []),
+                      ...(req.txHash ? [['Tx Hash', req.txHash.slice(0, 20) + '…']] : []),
+                    ].map(([k, v]) => v ? (
+                      <div key={k}>
+                        <p className="text-[10px] text-white/25 uppercase tracking-[0.06em] mb-0.5">{k}</p>
+                        <p className="text-[12px] text-white/70 break-all">{v}</p>
+                      </div>
+                    ) : null)}
+                  </div>
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* ── Document preview modal ── */}
-      <AnimatePresence>
-        {docPreview && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
-            onClick={() => setDocPreview(null)}
-          >
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-[#0f0f0f] border border-white/[0.1] rounded-2xl p-4 max-w-lg w-full"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-[13px] font-semibold">{docPreview.label}</p>
-                <button onClick={() => setDocPreview(null)} className="text-white/30 hover:text-white text-[18px] leading-none">×</button>
-              </div>
-              <img src={docPreview.dataUri} alt={docPreview.label}
-                className="w-full rounded-xl border border-white/[0.07]" />
             </motion.div>
-          </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Document preview modal ── */}
+        <AnimatePresence>
+          {docPreview && (
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-6"
+              onClick={() => setDocPreview(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.9, opacity: 0 }}
+                className="bg-[#0f0f0f] border border-white/[0.1] rounded-2xl p-4 max-w-lg w-full"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-[13px] font-semibold">{docPreview.label}</p>
+                  <button onClick={() => setDocPreview(null)} className="text-white/30 hover:text-white text-[18px] leading-none">×</button>
+                </div>
+                <img src={docPreview.dataUri} alt={docPreview.label}
+                  className="w-full rounded-xl border border-white/[0.07]" />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {/* ── Approve modal (rendered outside the row so it's not clipped) ── */}
+      <AnimatePresence>
+        {showApprove && (
+          <ApproveModal
+            req={req}
+            onClose={() => setShowApprove(false)}
+            onApprove={onApprove}
+          />
         )}
       </AnimatePresence>
-    </div>
+    </>
   )
 }
 
@@ -579,13 +791,13 @@ export default function IssuerDashboard() {
     finally  { setLoadingReqs(false) }
   }
 
+  // Generic status change (processing / rejected / dispatched)
   const handleRequestAction = async (id, status, extra = {}) => {
     try {
       await issuerService.updateRequestStatus(id, { status, ...extra })
       toast({
-        description: status === 'approved'   ? '✅ Request approved.'
-          : status === 'rejected'  ? '❌ Request rejected.'
-          : status === 'dispatched'? '📦 Marked as dispatched.'
+        description: status === 'rejected'   ? '❌ Request rejected.'
+          : status === 'dispatched' ? '📦 Marked as dispatched.'
           : `Status updated to ${status}.`
       })
       fetchRequests()
@@ -593,6 +805,20 @@ export default function IssuerDashboard() {
     } catch (err) {
       toast({ variant: 'destructive', description: err?.response?.data?.message ?? 'Action failed.' })
     }
+  }
+
+  // Approve: upload PDF + issue on blockchain in one backend call
+  const handleApproveRequest = async (id, pdfFile) => {
+    const { data } = await issuerService.approveRequest(id, pdfFile)
+    toast({
+      description: data.blockchainMock
+        ? '✅ Approved! Certificate saved (mock chain) and email sent.'
+        : '✅ Approved! Certificate issued on blockchain and emailed to student.',
+    })
+    fetchRequests()
+    fetchReqStats()
+    fetchStats()
+    fetchCertificates()
   }
 
   const handleFileSelect = async selectedFile => {
@@ -838,25 +1064,6 @@ export default function IssuerDashboard() {
                     View all →
                   </button>
                 </div>
-                {/* {loadingCerts ? (
-                  <div className="flex justify-center py-12"><Spin /></div>
-                ) : certificates.length === 0 ? (
-                  <div className="text-center py-12">
-                    <p className="text-[15px] font-semibold mb-2">No certificates yet</p>
-                    <p className="text-[13px] text-white/40 mb-6">Issue your first certificate to get started.</p>
-                    <button onClick={() => setShowForm(true)}
-                      className="btn-shine h-10 px-6 rounded-full text-[13px] font-semibold text-white"
-                      style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}>
-                      Issue Certificate →
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {certificates.slice(0, 5).map(c => (
-                      <CertRow key={c._id} c={c} onRevoke={handleRevoke} onResend={handleResendClaim} />
-                    ))}
-                  </div>
-                )} */}
               </div>
             </div>
           )}
@@ -907,7 +1114,12 @@ export default function IssuerDashboard() {
                 ) : (
                   <div className="flex flex-col gap-2">
                     {requests.map(r => (
-                      <RequestRow key={r._id} req={r} onAction={handleRequestAction} />
+                      <RequestRow
+                        key={r._id}
+                        req={r}
+                        onAction={handleRequestAction}
+                        onApprove={handleApproveRequest}
+                      />
                     ))}
                   </div>
                 )}
@@ -959,7 +1171,7 @@ export default function IssuerDashboard() {
         </div>
       </main>
 
-      {/* ── Issue Certificate Modal ───────────────────────────── */}
+      {/* ── Issue Certificate Modal (manual flow) ────────────────────────────── */}
       <AnimatePresence>
         {showForm && (
           <motion.div
