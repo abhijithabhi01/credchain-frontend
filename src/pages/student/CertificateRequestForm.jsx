@@ -404,10 +404,10 @@ function PaymentStep({ form, onPay, paying, paid, onBack, onNext }) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
+        {/* <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl bg-white/[0.03] border border-white/[0.06]">
           <ShieldCheck size={14} className="text-green-400 shrink-0" />
           <p className="text-[12px] text-white/35">Simulated payment — no real transaction occurs.</p>
-        </div>
+        </div> */}
 
         <AnimatePresence mode="wait">
           {paid ? (

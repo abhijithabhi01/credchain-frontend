@@ -6,21 +6,25 @@ import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import {
   GraduationCap, FileText, Search, LogOut,
   CheckCircle2, XCircle, ChevronRight, User, BookOpen, Clock,
-  AlertCircle, Package,
+  AlertCircle, Package, RefreshCw,
 } from 'lucide-react'
 
-function Sidebar({ active, onNav, onLogout, student, hasSubmittedRequest }) {
+function Sidebar({ active, onNav, onLogout, student, hasSubmittedRequest, allRequestsTerminal }) {
   const eligible = student?.eligible
 
   const NAV = [
     { id: 'dashboard', icon: <GraduationCap size={15} />, label: 'Dashboard' },
-    // Show "Request Certificate" only if eligible AND hasn't submitted yet
-    ...(eligible && !hasSubmittedRequest ? [
+    // Show "Request Certificate" only if eligible, hasn't submitted yet, OR all previous requests are terminal
+    ...(eligible && (!hasSubmittedRequest || allRequestsTerminal) ? [
       { id: 'request', icon: <FileText size={15} />, label: 'Request Certificate' },
     ] : []),
-    // Show "Track Request" only if a request has been submitted
-    ...(hasSubmittedRequest ? [
+    // Show "Track Request" only if a request has been submitted and is not yet terminal
+    ...(hasSubmittedRequest && !allRequestsTerminal ? [
       { id: 'status', icon: <Search size={15} />, label: 'Track Request' },
+    ] : []),
+    // Always show "Track Request" if there are submitted requests (for history)
+    ...(hasSubmittedRequest && allRequestsTerminal ? [
+      { id: 'status', icon: <Package size={15} />, label: 'View Certificates' },
     ] : []),
   ]
 
@@ -114,7 +118,7 @@ function RequestStatusCard({ requestId, token }) {
   )
 }
 
-function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds, studentToken }) {
+function DashboardTab({ student, onNav, hasSubmittedRequest, allRequestsTerminal, submittedRequestIds, studentToken }) {
   const eligible = student?.eligible
   const reason   = student?.eligibilityReason ?? student?.reason
 
@@ -126,6 +130,10 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
     ['Institution',     student?.institution     ?? student?.college ?? 'KTU'],
   ]
 
+  // Determine which banner to show
+  const showEligibilityBanner = !hasSubmittedRequest || allRequestsTerminal
+  const showDispatchedBanner  = hasSubmittedRequest && allRequestsTerminal
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -133,8 +141,25 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="max-w-[720px]"
     >
-      {/* Eligibility Banner — only shown before a request is submitted */}
-      {!hasSubmittedRequest && (
+      {/* Dispatched / Completed Banner */}
+      {showDispatchedBanner && (
+        <div className="rounded-2xl p-6 mb-6 border bg-purple-500/[0.06] border-purple-500/20 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-purple-500/15">
+            <Package size={20} className="text-purple-400" />
+          </div>
+          <div>
+            <p className="text-[14px] font-semibold mb-1 text-purple-400">
+              Certificate(s) Dispatched
+            </p>
+            <p className="text-[13px] text-white/50 leading-relaxed">
+              Your certificate(s) have been dispatched. Check your email or contact your institution for delivery details.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Eligibility Banner — only when no pending/in-progress request exists */}
+      {showEligibilityBanner && !showDispatchedBanner && (
         <div className={`rounded-2xl p-6 mb-6 border flex items-start gap-4 ${
           eligible ? 'bg-green-500/[0.06] border-green-500/20' : 'bg-red-500/[0.06] border-red-500/20'
         }`}>
@@ -153,6 +178,21 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
               {eligible
                 ? 'Your academic records are verified. You can submit a certificate request.'
                 : reason ?? 'You do not currently meet the eligibility criteria for certificate requests.'}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Active request banner (pending/processing/approved) */}
+      {hasSubmittedRequest && !allRequestsTerminal && (
+        <div className="rounded-2xl p-6 mb-6 border bg-blue-500/[0.06] border-blue-500/20 flex items-start gap-4">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-blue-500/15">
+            <Clock size={20} className="text-blue-400 animate-pulse" />
+          </div>
+          <div>
+            <p className="text-[14px] font-semibold mb-1 text-blue-400">Certificate Request In Progress</p>
+            <p className="text-[13px] text-white/50 leading-relaxed">
+              Your certificate request is being processed. You will be notified once it's dispatched.
             </p>
           </div>
         </div>
@@ -180,7 +220,8 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
       </div>
 
       {/* CTA area */}
-      {eligible && !hasSubmittedRequest && (
+      {/* Show "Request a Certificate" only when eligible and no active (non-terminal) request exists */}
+      {eligible && (!hasSubmittedRequest) && (
         <button
           onClick={() => onNav('request')}
           className="btn-shine h-12 px-7 rounded-xl text-[14px] font-semibold text-white flex items-center gap-2"
@@ -190,7 +231,8 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
         </button>
       )}
 
-      {hasSubmittedRequest && (
+      {/* Show request status cards when there are active requests */}
+      {hasSubmittedRequest && !allRequestsTerminal && (
         <div className="bg-[#0a0a0a] border border-[#38bdf8]/20 rounded-2xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-9 h-9 rounded-xl bg-[#38bdf8]/10 border border-[#38bdf8]/20 flex items-center justify-center shrink-0">
@@ -213,6 +255,30 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
         </div>
       )}
 
+      {/* Show dispatched certificates summary */}
+      {hasSubmittedRequest && allRequestsTerminal && (
+        <div className="bg-[#0a0a0a] border border-purple-500/20 rounded-2xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
+              <Package size={16} className="text-purple-400" />
+            </div>
+            <p className="text-[14px] font-semibold text-white">Dispatched Certificates</p>
+          </div>
+          <div className="mb-4">
+            {submittedRequestIds.map(id => (
+              <RequestStatusCard key={id} requestId={id} token={studentToken} />
+            ))}
+          </div>
+          <button
+            onClick={() => onNav('status')}
+            className="h-10 px-5 rounded-xl text-[13px] font-semibold text-white flex items-center gap-2"
+            style={{ background: 'linear-gradient(90deg, #a855f7, #38bdf8)' }}
+          >
+            <Package size={14} /> View Certificate Details
+          </button>
+        </div>
+      )}
+
       {!eligible && (
         <div className="bg-[#0a0a0a] border border-white/[0.07] rounded-2xl p-6 text-center">
           <p className="text-[13px] text-white/40 leading-relaxed">
@@ -225,7 +291,7 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
 }
 
 export default function StudentPortalDashboard() {
-  const { studentUser, studentToken, studentLogout, hasSubmittedRequest, submittedRequestIds } = useStudentPortal()
+  const { studentUser, studentToken, studentLogout, hasSubmittedRequest, submittedRequestIds, allRequestsTerminal } = useStudentPortal()
   const navigate = useNavigate()
 
   const [tab, setTab] = (function() {
@@ -252,6 +318,7 @@ export default function StudentPortalDashboard() {
         onLogout={studentLogout}
         student={studentUser}
         hasSubmittedRequest={hasSubmittedRequest}
+        allRequestsTerminal={allRequestsTerminal}
       />
 
       <main className="flex-1 overflow-auto">
@@ -265,6 +332,7 @@ export default function StudentPortalDashboard() {
             student={studentUser}
             onNav={handleNav}
             hasSubmittedRequest={hasSubmittedRequest}
+            allRequestsTerminal={allRequestsTerminal}
             submittedRequestIds={submittedRequestIds}
             studentToken={studentToken ?? localStorage.getItem('studentPortalToken')}
           />

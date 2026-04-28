@@ -72,6 +72,11 @@ export const studentPortalService = {
     api.get(`/student/request-status/${requestId}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
+getMyRequests: (token) =>
+  api.get('/student/my-requests', {
+    headers: { Authorization: `Bearer ${token}` }
+  }),
 }
+
 
 export default api

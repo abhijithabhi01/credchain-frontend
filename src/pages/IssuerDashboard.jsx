@@ -838,7 +838,7 @@ export default function IssuerDashboard() {
                     View all →
                   </button>
                 </div>
-                {loadingCerts ? (
+                {/* {loadingCerts ? (
                   <div className="flex justify-center py-12"><Spin /></div>
                 ) : certificates.length === 0 ? (
                   <div className="text-center py-12">
@@ -856,7 +856,7 @@ export default function IssuerDashboard() {
                       <CertRow key={c._id} c={c} onRevoke={handleRevoke} onResend={handleResendClaim} />
                     ))}
                   </div>
-                )}
+                )} */}
               </div>
             </div>
           )}

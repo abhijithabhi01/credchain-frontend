@@ -5,7 +5,7 @@ import { studentPortalService } from '@/services/api'
 import { useStudentPortal } from '@/contexts/StudentPortalContext'
 import {
   ArrowLeft, Loader2, AlertCircle, CheckCircle2,
-  Clock, XCircle, Link2, Package, ExternalLink, RefreshCw,
+  Clock, XCircle, Link2, Package, ExternalLink, RefreshCw, GraduationCap,
 } from 'lucide-react'
 
 const STATUS_CONFIG = {
@@ -28,6 +28,10 @@ const STATUS_CONFIG = {
   completed: {
     color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20',
     icon: <CheckCircle2 size={20} className="text-green-400" />, label: 'Completed',
+  },
+  issued: {
+    color: 'text-green-400', bg: 'bg-green-500/10', border: 'border-green-500/20',
+    icon: <GraduationCap size={20} className="text-green-400" />, label: 'Certificate Issued',
   },
   rejected: {
     color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20',
@@ -59,10 +63,12 @@ function Timeline({ status }) {
     { key: 'processing', label: 'Under Review',      desc: 'Verification in progress' },
     { key: 'approved',   label: 'Approved',          desc: 'Request approved by institution' },
     { key: 'dispatched', label: 'Dispatched',        desc: 'Certificate has been dispatched' },
+    { key: 'issued',     label: 'Issued',            desc: 'Certificate issued on blockchain' },
     { key: 'completed',  label: 'Delivered',         desc: 'Certificate delivered successfully' },
   ]
-  const ORDER    = ['pending', 'processing', 'approved', 'dispatched', 'completed']
-  const curIndex = ORDER.indexOf(status?.toLowerCase() ?? 'pending')
+  const ORDER    = ['pending', 'processing', 'approved', 'dispatched', 'issued', 'completed']
+  const normalised = status?.toLowerCase() ?? 'pending'
+  const curIndex = ORDER.indexOf(normalised)
 
   return (
     <div className="space-y-0">
@@ -168,21 +174,27 @@ function RequestCard({ requestId, token }) {
           <p className="text-[11px] text-white/30 uppercase tracking-[0.1em] mb-5">Request Details</p>
           <InfoRow label="Request ID"       value={result?.requestId ?? result?._id} mono />
           <InfoRow label="Certificate Type" value={result?.certificateType} />
-          <InfoRow label="Submitted"        value={result?.createdAt
-            ? new Date(result.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
+          <InfoRow label="Submitted"        value={(result?.submittedAt ?? result?.createdAt)
+            ? new Date(result.submittedAt ?? result.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })
             : '—'} />
           <InfoRow label="Register Number"  value={result?.registerNumber} mono />
         </div>
 
-        {(result?.txHash ?? result?.blockHash ?? result?.certId) && (
+        {(result?.blockchain?.txHash ?? result?.txHash ?? result?.blockchain?.certId ?? result?.certId) && (
           <div className="bg-[#0a0a0a] border border-[#38bdf8]/15 rounded-2xl p-7">
             <div className="flex items-center gap-2 mb-5">
               <Link2 size={14} className="text-[#38bdf8]/60" />
               <p className="text-[11px] text-[#38bdf8]/60 uppercase tracking-[0.1em]">Blockchain Record</p>
             </div>
-            <InfoRow label="Transaction Hash" value={result?.txHash} mono
-              href={result?.txHash ? `https://sepolia.etherscan.io/tx/${result.txHash}` : undefined} />
-            <InfoRow label="Certificate ID"   value={result?.certId} mono />
+            <InfoRow label="Transaction Hash"
+              value={result?.blockchain?.txHash ?? result?.txHash}
+              mono
+              href={(result?.blockchain?.txHash ?? result?.txHash)
+                ? `https://sepolia.etherscan.io/tx/${result.blockchain?.txHash ?? result.txHash}`
+                : undefined}
+            />
+            <InfoRow label="Certificate ID" value={result?.blockchain?.certId ?? result?.blockchainCertId ?? result?.certId} mono />
+            <InfoRow label="IPFS Hash" value={result?.blockchain?.ipfsHash ?? result?.ipfsHash} mono />
           </div>
         )}
       </div>
