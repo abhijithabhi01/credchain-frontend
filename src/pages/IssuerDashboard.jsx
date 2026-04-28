@@ -1003,11 +1003,11 @@ export default function IssuerDashboard() {
                 <RefreshCw size={14} />
               </button>
             )}
-            <button onClick={() => setShowForm(true)}
+            {/* <button onClick={() => setShowForm(true)}
               className="btn-shine h-8 px-4 md:px-5 rounded-full text-[12px] md:text-[13px] font-semibold text-white whitespace-nowrap"
               style={{ background: 'linear-gradient(90deg,#a855f7,#38bdf8)' }}>
               + Issue
-            </button>
+            </button> */}
           </div>
         </div>
 

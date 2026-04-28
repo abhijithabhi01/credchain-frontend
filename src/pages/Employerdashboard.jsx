@@ -24,7 +24,7 @@ export default function EmployerDashboard() {
       const res  = await publicService.verifyCertificate(certId.trim())
       const data = res.data
       setResult(data)
-
+      
       // Prepend to session history
       setHistory(prev => [{
         certId:    certId.trim(),

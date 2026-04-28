@@ -146,7 +146,15 @@ function RequestCard({ requestId, token }) {
     )
   }
 
-  const cfg = STATUS_CONFIG[result?.status?.toLowerCase()] ?? STATUS_CONFIG.pending
+  const rawStatus = result?.status?.toLowerCase() ?? 'pending'
+  // Treat "approved" as "completed" in the UI
+  const displayStatus = rawStatus === 'approved' ? 'completed' : rawStatus
+  const cfg = STATUS_CONFIG[displayStatus] ?? STATUS_CONFIG.pending
+
+  // Only show blockchain record after the request is approved or beyond
+  const BLOCKCHAIN_VISIBLE_STATUSES = ['approved', 'dispatched', 'issued', 'completed']
+  const showBlockchain = BLOCKCHAIN_VISIBLE_STATUSES.includes(rawStatus) &&
+    (result?.blockchain?.txHash ?? result?.txHash ?? result?.blockchain?.certId ?? result?.certId)
 
   return (
     <motion.div
@@ -180,7 +188,7 @@ function RequestCard({ requestId, token }) {
           <InfoRow label="Register Number"  value={result?.registerNumber} mono />
         </div>
 
-        {(result?.blockchain?.txHash ?? result?.txHash ?? result?.blockchain?.certId ?? result?.certId) && (
+        {showBlockchain && (
           <div className="bg-[#0a0a0a] border border-[#38bdf8]/15 rounded-2xl p-7">
             <div className="flex items-center gap-2 mb-5">
               <Link2 size={14} className="text-[#38bdf8]/60" />
@@ -202,7 +210,7 @@ function RequestCard({ requestId, token }) {
       {/* Right: Timeline */}
       <div className="bg-[#0a0a0a] border border-white/[0.07] rounded-2xl p-7 self-start">
         <p className="text-[11px] text-white/30 uppercase tracking-[0.1em] mb-6">Progress</p>
-        <Timeline status={result?.status} />
+        <Timeline status={displayStatus} />
       </div>
     </motion.div>
   )

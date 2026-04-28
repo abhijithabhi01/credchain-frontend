@@ -9,13 +9,14 @@ import {
   AlertCircle, Package, RefreshCw,
 } from 'lucide-react'
 
+
 function Sidebar({ active, onNav, onLogout, student, hasSubmittedRequest, allRequestsTerminal }) {
   const eligible = student?.eligible
 
   const NAV = [
     { id: 'dashboard', icon: <GraduationCap size={15} />, label: 'Dashboard' },
     // Show "Request Certificate" only if eligible, hasn't submitted yet, OR all previous requests are terminal
-    ...(eligible && (!hasSubmittedRequest || allRequestsTerminal) ? [
+    ...(eligible && (!hasSubmittedRequest) ? [
       { id: 'request', icon: <FileText size={15} />, label: 'Request Certificate' },
     ] : []),
     // Show "Track Request" only if a request has been submitted and is not yet terminal
@@ -118,7 +119,7 @@ function RequestStatusCard({ requestId, token }) {
   )
 }
 
-function DashboardTab({ student, onNav, hasSubmittedRequest, allRequestsTerminal, submittedRequestIds, studentToken }) {
+function DashboardTab({ student, onNav, hasSubmittedRequest, allRequestsTerminal, submittedRequestIds, studentToken, requestStatuses }) {
   const eligible = student?.eligible
   const reason   = student?.eligibilityReason ?? student?.reason
 
@@ -142,21 +143,36 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, allRequestsTerminal
       className="max-w-[720px]"
     >
       {/* Dispatched / Completed Banner */}
-      {showDispatchedBanner && (
-        <div className="rounded-2xl p-6 mb-6 border bg-purple-500/[0.06] border-purple-500/20 flex items-start gap-4">
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-purple-500/15">
-            <Package size={20} className="text-purple-400" />
+      {showDispatchedBanner && (() => {
+        // Determine the dominant terminal status
+        const statuses = Object.values(requestStatuses ?? {})
+        const isApproved = statuses.length > 0 && statuses.every(s => s === 'approved')
+        return isApproved ? (
+          <div className="rounded-2xl p-6 mb-6 border bg-green-500/[0.06] border-green-500/20 flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-green-500/15">
+              <CheckCircle2 size={20} className="text-green-400" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold mb-1 text-green-400">Certificate Request Completed</p>
+              <p className="text-[13px] text-white/50 leading-relaxed">
+                Your certificate request has been approved and is now complete.
+              </p>
+            </div>
           </div>
-          <div>
-            <p className="text-[14px] font-semibold mb-1 text-purple-400">
-              Certificate(s) Dispatched
-            </p>
-            <p className="text-[13px] text-white/50 leading-relaxed">
-              Your certificate(s) have been dispatched. Check your email or contact your institution for delivery details.
-            </p>
+        ) : (
+          <div className="rounded-2xl p-6 mb-6 border bg-purple-500/[0.06] border-purple-500/20 flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-purple-500/15">
+              <Package size={20} className="text-purple-400" />
+            </div>
+            <div>
+              <p className="text-[14px] font-semibold mb-1 text-purple-400">Certificate(s) Dispatched</p>
+              <p className="text-[13px] text-white/50 leading-relaxed">
+                Your certificate(s) have been dispatched. Check your email or contact your institution for delivery details.
+              </p>
+            </div>
           </div>
-        </div>
-      )}
+        )
+      })()}
 
       {/* Eligibility Banner — only when no pending/in-progress request exists */}
       {showEligibilityBanner && !showDispatchedBanner && (
@@ -255,29 +271,39 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, allRequestsTerminal
         </div>
       )}
 
-      {/* Show dispatched certificates summary */}
-      {hasSubmittedRequest && allRequestsTerminal && (
-        <div className="bg-[#0a0a0a] border border-purple-500/20 rounded-2xl p-6">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="w-9 h-9 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center shrink-0">
-              <Package size={16} className="text-purple-400" />
+      {/* Show dispatched/completed certificates summary */}
+      {hasSubmittedRequest && allRequestsTerminal && (() => {
+        const statuses = Object.values(requestStatuses ?? {})
+        const isApproved = statuses.length > 0 && statuses.every(s => s === 'approved')
+        return (
+          <div className={`bg-[#0a0a0a] border rounded-2xl p-6 ${isApproved ? 'border-green-500/20' : 'border-purple-500/20'}`}>
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${isApproved ? 'bg-green-500/10 border border-green-500/20' : 'bg-purple-500/10 border border-purple-500/20'}`}>
+                {isApproved
+                  ? <CheckCircle2 size={16} className="text-green-400" />
+                  : <Package size={16} className="text-purple-400" />}
+              </div>
+              <p className="text-[14px] font-semibold text-white">
+                {isApproved ? 'Completed Requests' : 'Dispatched Certificates'}
+              </p>
             </div>
-            <p className="text-[14px] font-semibold text-white">Dispatched Certificates</p>
+            <div className="mb-4">
+              {submittedRequestIds.map(id => (
+                <RequestStatusCard key={id} requestId={id} token={studentToken} />
+              ))}
+            </div>
+            <button
+              onClick={() => onNav('status')}
+              className="h-10 px-5 rounded-xl text-[13px] font-semibold text-white flex items-center gap-2"
+              style={{ background: isApproved ? 'linear-gradient(90deg, #38bdf8, #22c55e)' : 'linear-gradient(90deg, #a855f7, #38bdf8)' }}
+            >
+              {isApproved
+                ? <><CheckCircle2 size={14} /> View Certificate Details</>
+                : <><Package size={14} /> View Certificate Details</>}
+            </button>
           </div>
-          <div className="mb-4">
-            {submittedRequestIds.map(id => (
-              <RequestStatusCard key={id} requestId={id} token={studentToken} />
-            ))}
-          </div>
-          <button
-            onClick={() => onNav('status')}
-            className="h-10 px-5 rounded-xl text-[13px] font-semibold text-white flex items-center gap-2"
-            style={{ background: 'linear-gradient(90deg, #a855f7, #38bdf8)' }}
-          >
-            <Package size={14} /> View Certificate Details
-          </button>
-        </div>
-      )}
+        )
+      })()}
 
       {!eligible && (
         <div className="bg-[#0a0a0a] border border-white/[0.07] rounded-2xl p-6 text-center">
@@ -291,7 +317,7 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, allRequestsTerminal
 }
 
 export default function StudentPortalDashboard() {
-  const { studentUser, studentToken, studentLogout, hasSubmittedRequest, submittedRequestIds, allRequestsTerminal } = useStudentPortal()
+  const { studentUser, studentToken, studentLogout, hasSubmittedRequest, submittedRequestIds, allRequestsTerminal, requestStatuses } = useStudentPortal()
   const navigate = useNavigate()
 
   const [tab, setTab] = (function() {
@@ -335,6 +361,7 @@ export default function StudentPortalDashboard() {
             allRequestsTerminal={allRequestsTerminal}
             submittedRequestIds={submittedRequestIds}
             studentToken={studentToken ?? localStorage.getItem('studentPortalToken')}
+            requestStatuses={requestStatuses}
           />
         </div>
       </main>

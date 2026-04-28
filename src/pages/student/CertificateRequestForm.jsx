@@ -10,8 +10,8 @@ import {
   MapPin, Phone, Mail, Hash, GraduationCap, Calendar,
 } from 'lucide-react'
 
-const CERT_AMOUNT = 2500
-const CERT_TYPES  = ['Degree Certificate']
+const CERT_AMOUNT = 2000
+const CERT_TYPES  = ['MCA Degree Certificate']
 const STEPS       = ['Details', 'Documents', 'Payment', 'Summary', 'Submit']
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -375,7 +375,7 @@ function PaymentStep({ form, onPay, paying, paid, onBack, onNext }) {
 
         <div className="space-y-3 mb-6">
           {[
-            ['Certificate', 'Degree Certificate'],
+            ['Certificate', 'MCA Degree Certificate'],
             ['Delivery To', form.address ? `${form.address}, ${form.pincode}` : '—'],
             ['Contact',     form.email],
           ].map(([k, v]) => (
@@ -751,8 +751,8 @@ export default function CertificateRequestForm() {
             email:           form.email,
             address:         form.address,
             pincode:         form.pincode,
-            certificateType: "Degree Certificate",
-            amount:          type === 'Degree Certificate' ? 2000 : 500,
+            certificateType: "MCA Degree Certificate",
+            amount:          type === 'MCA Degree Certificate' ? 2000 : 500,
             paymentStatus:   'paid',
             documents,
           }, studentToken)
