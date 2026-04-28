@@ -127,7 +127,10 @@ function RequestRow({ req, onAction }) {
     setActionOpen(false)
   }
 
-  // ── Eligibility badges ──────────────────────────────────────────────────────
+  // ── Eligibility badges — derived from live flags (not stale degreeEligible) ─
+  const isActuallyEligible = student
+    ? (!student.hasBacklogs && !!student.resultsPublished)
+    : false
   const badges = student ? [
     {
       label:  student.hasBacklogs      ? 'Has Backlogs'        : 'No Backlogs',
@@ -136,13 +139,13 @@ function RequestRow({ req, onAction }) {
     },
     {
       label:  student.resultsPublished ? 'Results Published'   : 'Results Pending',
-      ok:     student.resultsPublished,
+      ok:     !!student.resultsPublished,
       icon:   student.resultsPublished ? '✓'                   : '!',
     },
     {
-      label:  student.degreeEligible   ? 'Degree Eligible'     : 'Not Eligible',
-      ok:     student.degreeEligible,
-      icon:   student.degreeEligible   ? '✓'                   : '✕',
+      label:  isActuallyEligible       ? 'Degree Eligible'     : 'Not Eligible',
+      ok:     isActuallyEligible,
+      icon:   isActuallyEligible       ? '✓'                   : '✕',
     },
   ] : []
 
@@ -165,6 +168,9 @@ function RequestRow({ req, onAction }) {
   for (const d of documents) docMap[d.type] = d
   const allDocsPresent = requiredDocs.every(t => !!docMap[t])
 
+  // Student passport photo (uploaded during certificate request)
+  const studentPhoto = docMap['photo']
+
   const DOC_LABELS = { aadhar: 'Aadhar Card', hallticket: 'Hall Ticket', photo: 'Passport Photo' }
 
   // Grade → colour
@@ -184,6 +190,14 @@ function RequestRow({ req, onAction }) {
         <span className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border shrink-0 ${st.bg} ${st.border} ${st.color}`}>
           {st.icon} {st.label}
         </span>
+
+        {/* Student passport photo thumbnail */}
+        <div className="w-9 h-9 rounded-full shrink-0 overflow-hidden border border-white/[0.1] bg-white/[0.04] flex items-center justify-center">
+          {studentPhoto?.dataUri
+            ? <img src={studentPhoto.dataUri} alt="Photo" className="w-full h-full object-cover" />
+            : <span className="text-[14px] text-white/20">👤</span>
+          }
+        </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">

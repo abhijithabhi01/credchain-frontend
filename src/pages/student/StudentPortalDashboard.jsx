@@ -133,28 +133,30 @@ function DashboardTab({ student, onNav, hasSubmittedRequest, submittedRequestIds
       transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
       className="max-w-[720px]"
     >
-      {/* Eligibility Banner */}
-      <div className={`rounded-2xl p-6 mb-6 border flex items-start gap-4 ${
-        eligible ? 'bg-green-500/[0.06] border-green-500/20' : 'bg-red-500/[0.06] border-red-500/20'
-      }`}>
-        <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-          eligible ? 'bg-green-500/15' : 'bg-red-500/15'
+      {/* Eligibility Banner — only shown before a request is submitted */}
+      {!hasSubmittedRequest && (
+        <div className={`rounded-2xl p-6 mb-6 border flex items-start gap-4 ${
+          eligible ? 'bg-green-500/[0.06] border-green-500/20' : 'bg-red-500/[0.06] border-red-500/20'
         }`}>
-          {eligible
-            ? <CheckCircle2 size={20} className="text-green-400" />
-            : <XCircle size={20} className="text-red-400" />}
-        </div>
-        <div>
-          <p className={`text-[14px] font-semibold mb-1 ${eligible ? 'text-green-400' : 'text-red-400'}`}>
-            {eligible ? 'Eligible to Request Certificates' : 'Not Eligible'}
-          </p>
-          <p className="text-[13px] text-white/50 leading-relaxed">
+          <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+            eligible ? 'bg-green-500/15' : 'bg-red-500/15'
+          }`}>
             {eligible
-              ? 'Your academic records are verified. You can submit a certificate request.'
-              : reason ?? 'You do not currently meet the eligibility criteria for certificate requests.'}
-          </p>
+              ? <CheckCircle2 size={20} className="text-green-400" />
+              : <XCircle size={20} className="text-red-400" />}
+          </div>
+          <div>
+            <p className={`text-[14px] font-semibold mb-1 ${eligible ? 'text-green-400' : 'text-red-400'}`}>
+              {eligible ? 'Eligible to Request Certificates' : 'Not Eligible'}
+            </p>
+            <p className="text-[13px] text-white/50 leading-relaxed">
+              {eligible
+                ? 'Your academic records are verified. You can submit a certificate request.'
+                : reason ?? 'You do not currently meet the eligibility criteria for certificate requests.'}
+            </p>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Student Info Card */}
       <div className="bg-[#0a0a0a] border border-white/[0.07] rounded-2xl p-7 mb-5">
